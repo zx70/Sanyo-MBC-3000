@@ -1,0 +1,41 @@
+CPU Board contains a 4K monitor EPROM and 64K of RAM
+
+On startup the 4K Monitor ROM is paged in and executed at address 0000
+a small program copies the monitor program in the upper 2Kb EPROM to
+RAM at address E400-EBFF. The program is executed and the monitor
+EPROM is paged out.
+
+The Monitor program will try to load and execute a boot sector from
+Floppy Drive A. When it fails to load the bootsector the monitor will
+execute the main monitor program which has some commands to manipulate
+memory and access the Floppy Drives.
+
+MAMORY MAP
+
+ -----------------
+| MONITOR PROGRAM |
+|        ROM      |
+| 0000       0FFF |
+|----------------------------------------------------------
+|                        64K CPU RAM                       |
+| 0000                                                FFFF |
+ ----------------------------------------------------------
+
+
+MEMORY CONFIGURATION
+
+ ----------------------------------------------------------
+|     MAIN PROGRAM    |  MONITOR  | UNUSED RAM |  I/O RAM  |
+| 0000           E3FF | E400 EBFF | EC00  EFFF |FF00  FFFF |
+ ----------------------------------------------------------
+
+Communication with the I/O board is done through RAM at adresses FF00
+to FFFF. There are 12 devices to communicate with. Each device takes
+3 bytes. where the 1st two are data and 3 rd byte is Status/command
+byte.
+
+Reading and writing to these adresses does not directly write to
+hardware but are monitored by the I/O boards CPU.
+
+
+

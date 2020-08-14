@@ -1,0 +1,144 @@
+-----------------------------------------------------------------------------
+ MBC-3000 Monitor program                               Mr.Blinky Dec 2008
+-----------------------------------------------------------------------------
+
+The MBC-3000 has a 4K monitor program that is executed after power on or reset.
+It's function is to load and execute the bootsector from Drive A or execute the
+monitor program if it fails to do so.
+
+The monitor allows the operator to enter a program manualy and have simple disk
+access. A Command is entered as single letter followed immediately with one or
+more hexadecimal numbers seperated by a comma.
+
+The following memory commands are available:
+
+D start,end              Dump memory to CRT
+S start byte             Store bytes
+F start,end,byte         Fill memory
+M start,end,target	 Move memory
+G start                  Goto program
+
+The following disk commands are available:
+
+C drive              	  Calibrate disk
+R drive,track,sector,addr Read sector
+W drive,track,sector,addr Write sector 
+
+Note all capitals represent the single command letter, all lower case words
+represent a hexadecimal number. The spaces after the commands are just for
+clarity and should not be typed after a command.
+
+Hexadecimal numbers may be typed in lower or upper case. Leading zeros may be
+ommited.
+
+DUMP Memory command
+-------------------
+
+Dstart,end
+
+Displays memory from 'start' up to and including 'end' on CRT. Memory is 
+displayed in columns of 16 bytes,
+
+STORE memory command
+--------------------
+
+Sstart[SPACE][byte/Space/Enter]
+
+Sets memory pointer to 'start' and upon pressing space the old value is printed
+to CRT followed by a '-' at this point a new value can be entered by typing it's 
+hex value or the space key can be pressed to go to next address without changing
+the original value. To exit from store mode press enter.
+
+FILL Memory command
+-------------------
+
+F start,end,byte
+
+Fills memory from 'start' up to and including 'end' with the value 'byte'
+
+MOVE Memory command
+-------------------
+M start,end,target
+
+Copies memory block from 'start'up to and including 'end' to 'target'
+
+GOTO Memory command
+-------------------
+
+Gstart
+
+Allowes the operator to executes manually entered 8085 machine code at
+address 'start'. 
+
+The size of machine code can be reduced by using some of  the monitors
+subroutines. following a list of usefull subroutines:
+
+monitor subroutines
+-------------------
+
+E42C    Read Device
+E43A    Get Device Status
+E446    Read keyboard
+E45B    DiskIO
+E519    Print hex byte C
+E542    Print hex word BC
+E663    Print CRLF
+E66E    Print zero terminated string
+E68F    Print 'Error #' hex byte C
+E85C    Print '#' 
+
+-----------------------------------------------------------------------------
+Format disk program
+-----------------------------------------------------------------------------
+
+Enter the following program to format a disk in Drive A:
+
+S0000 21 1B 00 74 01 18 00 E5 CD 5B E4 E1 4E C2 8F E6
+      34 3E 9A BE C2 04 00 C9 80 02 00 00      
+
+To start formating the disk in Drive A type: G0
+
+After successful format a return is made to monitor. If there is an error the
+track number is printed at which the error occured. You can format another
+disk by typing G0 again.
+
+If you wish to format a disk in drive B the type: S0019 12 then G0
+
+Assembly listing of format program:
+
+;----------------------------------------------------------------------------
+; MBC-3000 Format disk program for built in monitor by Edwin Blink Dec 2008
+;----------------------------------------------------------------------------
+
+;Enter this program at address 0 using the build in monitor program Execute it
+;with by G0 To format a disk in drive B change the value at DRIVE to $12
+
+        .org    $0000
+ 
+        lxi     h,DSKTR ;disk structure track
+        mov     m,h     ;reset track
+FMTRK:        
+        lxi     b,DSKCM ;disk command structure
+        push    h       ;save pointer to track
+        call    $E45B   ;DiskIO
+        pop     h       
+        mov     c,m     ;Get track nr
+        jnz     $E68F   ;exit and print track error #
+        inr     m       ;track+1
+        mvi     a,$9A   ;last track+1
+        cmp     m       ;test all tracks formatted
+        jnz     FMTRK   ;format next track
+        ret             ;format complete
+        
+        ;disk format structure
+DSKCM:       
+        .db     $80    ;normal
+DRIVE:  .db     $02    ;02 for drive A or 12 for Drive B
+        .db     $00    ;sector count dont care
+DSKTR:  .db     $00    ;Track
+        .db     $00    ;sector dont care
+        .dw     $0000  ;DMA address dont care
+
+        .end
+        
+-----------------------------------------------------------------------------

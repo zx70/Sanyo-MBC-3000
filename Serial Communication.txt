@@ -1,0 +1,138 @@
+MBC-3000 Serial communication port information.
+-----------------------------------------------
+
+There are two serial ports at the rear of the MBC-3000 called LINE-1
+and LINE-2. Both ports are Initialized by the I/O board to 9600-7-E-1
+Meaning a baudrate of 9600 7 data bits even parity and 1 stopbit.
+
+The MBC-3000 uses two 8251 programmable communication interfaces and
+Two 8253 Programmable interval timers for baudrate clock generation.
+
+-----------------
+software access
+-----------------
+
+
+Each serial port is controlled by three device ports and is mapped
+the following way:
+
+
+Device	Device Port   Discription
+Number	Address
+
+04	FF0C	LINE-1 Mode register
+	FF0D	LINE-1 Baudrate register
+	FF0E	LINE-1 Set mode/busy
+
+05	FF0F	LINE-1 Reciever data register
+	FF11	LINE-1 Recieved New Character status
+
+06	FF12	LINE-1 Transmitter data register
+	FF14	LINE-1 Send data/Transmitter Busy
+
+07	FF15	LINE-2 Mode register
+	FF16	LINE-2 Baudrate register
+	FF17	LINE-2 Set mode/busy
+
+08	FF18	LINE-2 Reciever data register
+	FF1A	LINE-2 Recieved New Character status
+
+09	FF1B	LINE-2 Transmitter data register
+	FF1D	LINE-2 Send data/Transmitter Busy
+
+
+The serial ports can be controlled by writing to device addresses with the
+build in monitor or CP/Ms DDT using the S (store) command.
+
+For example to change LINE-1 mode to a baudrate of 19200 with 8 data bits,
+No parity and 1 stop bit.
+
+Monitor:
+
+	sFF0C 4C 00 FF[ENTER]
+
+DDT:
+
+	SFF0C 4C 00 FF.
+
+
+Under CP/M serial ports are configured as
+
+TTY: = LINE-1
+UD1: = LINE-2
+
+PIP can be used to send or recieve data to or from the serial ports.
+
+
+-------------------------
+FLOW CONTROL
+-------------------------
+
+There is only hardware Flow control for transmitting data. The UART
+will only send data when CTS is asserted. So CTS must be asserted by
+the remote device.
+
+
+
+
+
+-----------------
+Connector Pinouts
+-----------------
+
+The connectors pinout are compatible with the RS232 standard.
+Signal lines are driven by 74150 and 74154 Line drivers for the
+same compatibility.
+
+
+         LINE-1 & Line-2   (Rear View MBC-3000)
+  ___________________________________________________		       
+ /                                                   \
+| 13  12  11  10   9   8   7   6   5   4   3   2   1 |
+ \                                                  /
+  \ 25  24  23  22  21  20  19  18  17  16  15  14 / 
+    ----------------------------------------------
+                Female DB25 connector
+      	      
+Pin layout
+		 
+1  --     Shield           14 -  Not connected
+2  -> TxD Transmitter data 15 -> TCK Transmission signal element timing
+3  <- RxD Reciever data    16 -  Not connected
+4  -> RTS Request To Send  17 <- RCK Recievever signal element timing
+5  <- CTS Clear To Send    18 -  Not connected
+6  <- DSR Data Set Ready   19 -  Not connected
+7  -- GND Signal Ground    20 -> DTR Data Terminal Ready
+8  -  Not connected        21 -  Not connected
+9  -  Not connected        22 -  Not connected
+10 -  Not connected        23 -  Not connected
+11 -  Not connected        24 -  Not connected
+12 -  Not connected        25 -  Not connected
+13 -  Not connected
+
+Notes.
+ TCK(15) and RCK(17) used for synchronous transmissions only.
+ Do not connect SHIELD(1) to GND (7).
+
+
+
+--------------------------------------
+NULL MODEM ADAPTER
+--------------------------------------
+ 
+Below the pinouts for a null modem cable. so MBC-3000 can communicate with
+a personal computer using a 9 pin DB9 serial port. 
+
+
+ MBC-3000  PC
+ DB25(M)   DB9(F)
+ --------------
+ TXD(2)  > RXD(2)
+ RXD(3)  < TXD(3)
+ RTS(4)  > CTS(8)
+ CTS(5)  < RTS(7)
+ DSR(6)  < DTR(4)
+ GND(7)  - GND(5)
+ DTR(20) > DSR(6)
+
+ 
