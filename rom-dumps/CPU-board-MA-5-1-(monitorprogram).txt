@@ -1,0 +1,1421 @@
+                                ;
+                                ;	Disassembled by:
+                                ;		DASMx object code disassembler
+                                ;		(c) Copyright 1996-1998   Conquest Consultants
+                                ;		Version 1.20 (Apr  2 1998)
+                                ;
+                                ;	File:	D:\computers\Sanyo-MBC-3000\ROM dumps\CPU-board-MA-5-1.bin
+                                ;	Date:	Sat Jun 28 23:01:28 2008
+                                ;	CPU:	Intel 8085 (8085 family)
+
+                                ;-------------------------------
+                                ;CPU BOARD Monitor program
+                                ;-------------------------------
+
+                                ;The Monitor program was not written in native assembly and has room for many optimalisations.
+                                ;The monitor program tries to load a bootsector from drive A when it fails it will run the monitor tool which
+                                ;has a few commands to manipulate memory, execute code and read or write to disk.
+
+                                ;The monitor program is copied and executed in ram. So with a few tricks the monitor program can be altered to
+                                ;suit your needs.
+
+                                ;communication with devices is done using memory addresses FF00-FFFF
+                                ;the following devices are used by monitor program:
+
+                                ;0001 Keyboard
+                                ;0002 CRT
+                                ;0003 Printer ?
+                                ;000B Floppy Drive
+
+                                ;Device 4 and 7 are similar Serial line ports ?
+
+                                ;MBC-3000 has the following hardware
+
+                                ;LINE-1
+                                ;LINE-2
+                                ;PRINTER
+                                ;DRIVE-A
+                                ;DRIVE-B
+                                ;CRT
+                                ;KEYBOARD
+
+
+                                ;Monitor Commands
+                                ;----------------
+
+
+                                ;HARDWARE
+
+                                ;the 8085 SOD output controls paging of the 4K Monitor ROM.
+                                ;SOD=0 0000-0FFF = Monitor ROM
+                                ;SOD=1 0000-0FFF = RAM
+
+                                ;64K RAM is split into two 32K RAM banks and are controlled by
+                                ;writing to addresses 0000 and 0001 while the  monitor ROM is
+                                ;paged in.
+
+                                ;0000 Controls RAM bank at 0000-7FFF
+                                ;0001 Controls RAM bank at 8000-FFFF
+
+                                ;Values: FF = lower 32K RAM bank, FE = higher 32K RAM bank
+
+                                ;USEFULL COMMANDS
+                                ------------------
+
+                                ;gE400 tries to load and execute bootsector again.
+
+                                ;----------------------------------------------
+                                ; RESET
+                                ;----------------------------------------------
+
+                                ;First 2K of the EPROM just contains a small
+                                ;program to copy the monitor program from the
+                                ;EPROM to RAM at E400-EBFF and execute it
+
+                                        org	$0000
+
+                                ;initialize CPU board hardware
+
+0000 : 3E FF 		"> "		mvi	a,$FF	;lower 32K RAM bank
+0002 : 32 00 00 	"2  "		sta	$0000	;select RAM bank at 0000-7FFF
+0005 : 3E FE 		"> "		mvi	a,$FE	;upper  RAM bank
+0007 : 32 01 00 	"2  "		sta	$0001	;select RAM bank at 8000-FFFF
+
+                                ;reset device memory
+
+000A : 21 00 FF 	"!  "		lxi	h,$FF00	;I/O device memory
+000D				L000D:
+000D : 36 00 		"6 "		mvi	m,$00	;clear devices
+000F : 2C 		","		inr	l
+0010 : C2 0D 00 	"   "		jnz	L000D
+
+                                ;copy and execute monitor program
+
+0013 : 21 00 08 	"!  "		lxi	h,$0800	;location of monitor program in ROM
+0016 : 11 00 E4 	"   "		lxi	d,LE400	;copy and execute it in RAM
+0019				L0019:
+0019 : 7E 		"~"		mov	a,m	;copy 2K monitor program from ROM
+001A : 12 		" "		stax	d	;to RAM
+001B : 23 		"#"		inx	h
+001C : 13 		" "		inx	d
+001D : 7C 		"|"		mov	a,h
+001E : FE 10 		"  "		cpi	$10	;test End of ROM
+0020 : C2 19 00 	"   "		jnz	L0019	;Loop until end of ROM
+0023 : EB 		" "		xchg		;monitor addr
+0024 : F9 		" "		sphl		;set stack at E400
+0025 : C3 00 E4 	"   "		jmp	LE400	;execute monitor program
+
+                                ;----------------------------------------------
+                                ; Remainder of 2K is unused and filled with FF
+                                ;----------------------------------------------
+
+                                x0028:	DS	$0800-$,$FF
+
+                                ;----------------------------------------------
+                                ;Monitor program in upper 2K (0800-0FFF)
+                                ;----------------------------------------------
+
+                                ;This monitor program is copied to RAM and
+                                ;executed at E400.
+
+                                ;Monitor program loads and execute the boot sector from
+                                ;floppy Drive A. When it fails to do so it will execute
+                                ; the monitor program allowing the user to input code
+                                ;and execute it.
+
+                                ;RIM: A=SID,I7.5,I6.5,I5.5,IE,M7.5,M6.5,M5.5 (7..0)
+
+                                ;SIM: A=SOD(7)	Bit 7,A
+                                        S0E	
+                                        X
+                                        R7.5
+                                        MSE	
+                                        M7.5	\
+                                        M6.5	 0=Enable,1=disable interrupt
+                                        M5.5(0) /
+                                ;
+
+                                ;TEST: 3E 40 30 C9 RESET SOD
+                                
+                                ;------------------------------
+                                ;Boot Loader
+                                ;------------------------------
+E400				LE400:
+E400 : 3E C0 		"> "		mvi	a,$C0	;Change SOD to 1 to page out the monitor rom
+                                                        ;No changes to interrupt masks
+E402 : 30 		"0"		sim		
+E403 : 01 17 E4 	"   "		lxi	b,$E417	;FDD data structure
+E406 : 1E 0A 		"  "		mvi	e,$0A	;max retries
+E408				LE408:
+E408 : D5 		" "		push	d
+E409 : CD 5B E4 	" [ "		call	LE45B	;DiskIO
+E40C : D1 		" "		pop	d
+E40D : CA 80 FE 	"   "		jz	LFE80	;execute successfull loaded bootsector
+E410 : 1D 		" "		dcr	e	;failed so retry
+E411 : C2 08 E4 	"   "		jnz	LE408	;loop until out of retries
+E414 : C3 90 E8 	"   "		jmp	LE890	;enter monitor program
+
+                                ;Floppy Drive Command structure
+
+E417 : 80			XE417:	DB	$80	;normal
+E418 : 04				DB	$04	;read sector command,Drive A (command + 16 * Drive)
+E419 : 01				DB	$01	;sector count
+       00				DB	$00	;Track
+       01				DB	$01	;Sector
+E41C : 80 FE 		" "		DW	$FE80	;Boot sector RAM Address
+
+                                ;------------------------------
+                                ;I/O Write
+                                ;------------------------------
+
+                                ;Entry:
+                                        C  = char/byte to write
+                                        DE = device
+E41E				LE41E:
+E41E : CD 3A E4 	" : "		call	LE43A	;Read status
+E421 : FE FF 		"  "		cpi	$FF	;busy ?
+E423 : CA 1E E4 	"   "		jz	LE41E	;loop until ready
+E426 : 71 		"q"		mov	m,c	;store character
+E427 : 23 		"#"		inx	h
+E428 : 23 		"#"		inx	h
+E429 : 36 FF 		"6 "		mvi	m,$FF	;signal new data/busy
+E42B : C9 		" "		ret
+
+                                ;------------------------------
+                                ;I/O Read
+                                ;------------------------------
+
+                                ;entry:
+                                        DE = device
+                                ;Exit:
+                                        A = Char/byte read
+
+E42C				LE42C:
+E42C : CD 3A E4 	" : "		call	LE43A	;I/O Status
+E42F : FE 00 		"  "		cpi	$00	
+E431 : CA 2C E4 	" , "		jz	LE42C	;loop until got data
+E434 : 7E 		"~"		mov	a,m	;Read data
+E435 : 23 		"#"		inx	h
+E436 : 23 		"#"		inx	h
+E437 : 36 00 		"6 "		mvi	m,$00	;signal data read
+E439 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;I/O Status
+                                ;------------------------------
+
+                                ;Entry:
+                                        DE = device
+                                ;Exit:
+                                        A  = device status
+                                        HL = Device address
+E43A				LE43A:
+E43A : 21 00 FF 	"!  "		lxi	h,$FF00	;IO Memory base
+E43D : 19 		" "		dad	d	;3 bytes per device
+E43E : 19 		" "		dad	d
+E43F : 19 		" "		dad	d
+E440 : 23 		"#"		inx	h	;+2=device status
+E441 : 23 		"#"		inx	h
+E442 : 7E 		"~"		mov	a,m	;get Device status
+E443 : 2B 		"+"		dcx	h
+E444 : 2B 		"+"		dcx	h
+E445 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Read Key
+                                ;------------------------------
+
+E446				LE446:
+E446 : 11 01 00 	"   "		lxi	d,$0001	;Keyboard
+E449 : CD 2C E4 	" , "		call	LE42C	;I/O Read
+E44C : C9 		" "		ret
+
+                                ;------------------------------
+                                ; Print Character 
+                                ;------------------------------
+
+                                ;Entry C=character
+
+E44D				LE44D:
+E44D : 11 02 00 	"   "		lxi	d,$0002	;CRT
+E450 : CD 1E E4 	"   "		call	LE41E	;I/O Write
+E453 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Send character to printer
+                                ;------------------------------
+
+E454 : 11 03 00 	"   "		lxi	d,$0003	; ?
+E457 : CD 1E E4 	"   "		call	LE41E	;I/O Write
+E45A : C9 		" "		ret
+
+                                ;-------------------------------
+                                ;Disk I/O
+                                ;-------------------------------
+
+                                ;Execute Floppy Disk command
+
+                                ;Entry:
+                                ;	BC=pointer to data structure where:
+                                ;	
+                                ;       BC+0 = Byte count
+                                ;	BC+1 = Command + 16 * Drive Select
+                                ;	BC+2 = Sector Count
+                                ;	BC+3 = Track
+                                ;	BC+4 = Sector
+                                ;	BC+5 = RAM address word
+                                ;Exit:
+                                ;	 A=Result: 0,Z  Success
+                                ;	           1,NZ Fail
+
+                                DiskIO:
+E45B				LE45B:
+E45B : 3E 0A 		"> "		mvi	a,$0A	;Retries
+E45D				LE45D:
+E45D : F5 		" "		push	psw
+E45E : 11 0B 00 	"   "		lxi	d,$000B	;Floppy Disk Device
+E461 : CD 3A E4 	" : "		call	LE43A	;I/O Status get device address
+E464 : 71 		"q"		mov	m,c	;store pointer to FDD data structure
+E465 : 23 		"#"		inx	h
+E466 : 70 		"p"		mov	m,b	;into Device data word
+E467 : 23 		"#"		inx	h
+E468 : 36 FF 		"6 "		mvi	m,$FF	;Signal execute command
+E46A : 11 0B 00 	"   "		lxi	d,$000B	;FDD command
+E46D				LE46D:
+E46D : CD 3A E4 	" : "		call	LE43A	;Get device Status
+E470 : FE FF 		"  "		cpi	$FF	;test if device busy
+E472 : CA 6D E4 	" m "		jz	LE46D	;wait until ready
+
+E475 : 7E 		"~"		mov	a,m	;Get FDD result
+E476 : A7 		" "		ana	a	;Test any error
+E477 : CA 81 E4 	"   "		jz	LE481	;done if there was no error
+
+E47A : F1 		" "		pop	psw	;there was an error try again
+E47B : 3D 		"="		dcr	a	;retries -1
+E47C : C2 5D E4 	" ] "		jnz	LE45D	;try again until out of retries
+E47F : 3C 		"<"		inr	a	;A=01,NZ signal Fail
+E480 : C9 		" "		ret
+                                ;
+E481				LE481:
+E481 : F1 		" "		pop	psw	
+E482 : AF 		" "		xra	a	;A=0,Z Signal Success
+E483 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Command Key lookup table
+                                ;------------------------------
+
+                                ;'-' No command,Does nothing
+
+E484 : 00	;A -
+E485 : 00	;B -
+E486 : 06	;C
+       01	;D
+E488 : 00	;E -
+E489 : 03	;F
+E48A : 08	;G
+E48B : 00	;H -
+E48C : 0A	;I -
+E48D : 00	;J -
+E48E : 00	;K -
+E48F : 00	;L -
+E490 : 04	;M
+E491 : 00	;N -
+E492 : 00	;O -
+E493 : 00	;P -
+E494 : 00	;Q -
+E495 : 09	;R
+E496 : 02	;S
+E497 : 00	;T -
+E498 : 00	;U -
+E499 : 00	;V -
+E49A : 05	;W
+E49B : 00	;X -
+E49C : 00	;Y -
+E49D : 00	;Z -
+
+E49E : 00 		" "		nop
+E49F : 00 		" "		nop
+
+                                ;- Hex character lookup table -
+
+                                E4A0:	DB	"0123456789ABCDEF"
+
+                                ;error message
+
+                                E4B0:	DB	CR,LF
+                                        DB	"ERROR #"
+                                        DB	$00
+
+                                ;monitor version message
+
+                                E4BA:	DB	CR,LF
+                                        DB	"MBC-3000 MONITOR VER. 1.0"
+                                        DB	$00
+
+                                ;------------------------------
+                                ;ASCII to HEX
+                                ;------------------------------
+
+                                ;Entry	C=Character
+
+                                ;Exit	A=Hexvalue
+
+                                ;First deal with number digits
+
+E4D6				LE4D6:
+E4D6 : 21 67 E9 	"!g "		lxi	h,$E967	
+E4D9 : 71 		"q"		mov	m,c	;store CHAR
+E4DA : 3A 67 E9 	":g "		lda	$E967
+E4DD : D6 30 		" 0"		sui	"0"
+E4DF : 9F 		" "		sbb	a
+E4E0 : 2F 		"/"		cma		
+E4E1 : F5 		" "		push	psw	;FF for >="0"
+E4E2 : 3E 39 		">9"		mvi	a,"9"
+E4E4 : 21 67 E9 	"!g "		lxi	h,$E967
+E4E7 : 96 		" "		sub	m
+E4E8 : 9F 		" "		sbb	a
+E4E9 : 2F 		"/"		cma		;FF for <="9"
+E4EA : C1 		" "		pop	b
+E4EB : 48 		"H"		mov	c,b
+E4EC : A1 		" "		ana	c	
+E4ED : 1F 		" "		rar		;CY for chars "0" to "9"
+E4EE : D2 F7 E4 	"   "		jnc	LE4F7	;Not Numeric
+E4F1 : 3A 67 E9 	":g "		lda	$E967
+E4F4 : D6 30 		" 0"		sui	$30	;get Decimal Value
+E4F6 : C9 		" "		ret
+
+                                ;deal with hex digits "A" to "F"
+
+E4F7				LE4F7:
+E4F7 : 3A 67 E9 	":g "		lda	$E967	
+E4FA : D6 41 		" A"		sui	"A"
+E4FC : 9F 		" "		sbb	a
+E4FD : 2F 		"/"		cma		;00
+E4FE : F5 		" "		push	psw
+E4FF : 3E 46 		">F"		mvi	a,"F"
+E501 : 21 67 E9 	"!g "		lxi	h,$E967
+E504 : 96 		" "		sub	m
+E505 : 9F 		" "		sbb	a
+E506 : 2F 		"/"		cma
+E507 : C1 		" "		pop	b
+E508 : 48 		"H"		mov	c,b
+E509 : A1 		" "		ana	c
+E50A : 1F 		" "		rar		;CY for chars "A" to "F"
+E50B : D2 16 E5 	"   "		jnc	LE516	;jr No Hex
+E50E : 3A 67 E9 	":g "		lda	$E967
+E511 : D6 41 		" A"		sui	"A"	
+E513 : C6 0A 		"  "		adi	$0A	;Get hex value
+E515 : C9 		" "		ret
+
+                                ;No hex digit
+
+E516				LE516:
+E516 : 3E 10 		"> "		mvi	a,$10	;No hex value
+E518 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Print HEX byte
+                                ;------------------------------
+
+                                ;entry:
+                                ;       C = Byte
+                                
+E519				LE519:
+E519 : 21 68 E9 	"!h "		lxi	h,$E968
+E51C : 71 		"q"		mov	m,c		;save for low nibble
+E51D : 3A 68 E9 	":h "		lda	$E968
+E520 : E6 F8 		"  "		ani	$F8		;Keep high nibble
+E522 : 1F 		" "		rar
+E523 : 1F 		" "		rar
+E524 : 1F 		" "		rar
+E525 : 1F 		" "		rar
+E526 : 4F 		"O"		mov	c,a		;hex value
+E527 : 06 00 		"  "		mvi	b,$00
+E529 : 21 A0 E4 	"!  "		lxi	h,$E4A0		;Hex digit string
+E52C : 09 		" "		dad	b	
+E52D : 4E 		"N"		mov	c,m		;Get hex character
+E52E : CD 4D E4 	" M "		call	LE44D		;print char
+E531 : 3A 68 E9 	":h "		lda	$E968	
+E534 : E6 0F 		"  "		ani	$0F		;keep low nible
+E536 : 4F 		"O"		mov	c,a
+E537 : 06 00 		"  "		mvi	b,$00
+E539 : 21 A0 E4 	"!  "		lxi	h,$E4A0		lHex digit string
+E53C : 09 		" "		dad	b
+E53D : 4E 		"N"		mov	c,m		;get hex character
+E53E : CD 4D E4 	" M "		call	LE44D		;print char
+E541 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Print HEX word
+                                ;------------------------------
+
+                                ;Entry:	BC=word to print
+
+E542				LE542:
+E542 : 21 6A E9 	"!j "		lxi	h,$E96A		;
+E545 : 70 		"p"		mov	m,b		;MSB
+E546 : 2B 		"+"		dcx	h
+E547 : 71 		"q"		mov	m,c		;LSB
+E548 : 2A 69 E9 	"*i "		lhld	$E969
+E54B : 7C 		"|"		mov	a,h		;print MSB
+E54C : 4F 		"O"		mov	c,a
+E54D : CD 19 E5 	"   "		call	LE519		;Print HEX byte
+E550 : 2A 69 E9 	"*i "		lhld	$E969
+E553 : 7D 		"}"		mov	a,l		;print LSB
+E554 : 4F 		"O"		mov	c,a
+E555 : CD 19 E5 	"   "		call	LE519		;Print HEX byte
+E558 : C9 		" "		ret
+
+                                ;-------------------------------
+                                ;Get key
+                                ;-------------------------------
+
+                                ;Reads key echos it to CRT and changes
+                                ;lower case characters to upper case.
+                                ;and adds LF after CR
+
+E559				LE559:
+E559 : CD 46 E4 	" F "		call	LE446		;Read Key
+E55C : 32 66 E9 	"2f "		sta	$E966		;store KEY
+E55F : 2A 66 E9 	"*f "		lhld	$E966		;KEY
+E562 : 4D 		"M"		mov	c,l		;print key to CRT
+E563 : CD 4D E4 	" M "		call	LE44D		;print char
+E566 : 3A 66 E9 	":f "		lda	$E966		;KEY
+E569 : D6 61 		" a"		sui	"a"
+E56B : 9F 		" "		sbb	a
+E56C : 2F 		"/"		cma
+E56D : F5 		" "		push	psw
+E56E : 3E 7A 		">z"		mvi	a,"z"
+E570 : 21 66 E9 	"!f "		lxi	h,$E966		;KEY
+E573 : 96 		" "		sub	m
+E574 : 9F 		" "		sbb	a
+E575 : 2F 		"/"		cma
+E576 : C1 		" "		pop	b
+E577 : 48 		"H"		mov	c,b
+E578 : A1 		" "		ana	c
+E579 : 1F 		" "		rar
+E57A : D2 85 E5 	"   "		jnc	LE585		;jump not in range 'a'..'z'
+
+                                ;make character uper case
+
+E57D : 3A 66 E9 	":f "		lda	$E966		;KEY
+E580 : D6 20 		"  "		sui	$20		;change case to uper case
+E582 : 32 66 E9 	"2f "		sta	$E966		;KEY
+E585				LE585:
+E585 : 3A 66 E9 	":f "		lda	$E966		;KEY
+E588 : FE 0D 		"  "		cpi	$0D		
+E58A : C2 92 E5 	"   "		jnz	LE592		;jmp not CR/enter
+
+E58D : 0E 0A 		"  "		mvi	c,$0A		;print LF after CR
+E58F : CD 4D E4 	" M "		call	LE44D		;print char
+E592				LE592:
+E592 : 3A 66 E9 	":f "		lda	$E966		;Return with key
+E595 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Get Hex number
+                                ;------------------------------
+
+
+E596				LE596:
+E596 : 21 63 E9 	"!c "		lxi	h,$E963		;value status
+E599 : 36 00 		"6 "		mvi	m,$00		;signal no value
+E59B : 21 00 00 	"!  "		lxi	h,$0000		;clear hex value
+E59E : 22 6B E9 	""k "		shld	$E96B
+E5A1				LE5A1:
+E5A1 : CD 59 E5 	" Y "		call	LE559		;Get key
+E5A4 : 4F 		"O"		mov	c,a		;
+E5A5 : CD D6 E4 	"   "		call	LE4D6		;ASCII to HEX
+E5A8 : 32 65 E9 	"2e "		sta	$E965
+E5AB : 3A 65 E9 	":e "		lda	$E965
+E5AE : FE 10 		"  "		cpi	$10		;test no hex digit
+E5B0 : C2 B7 E5 	"   "		jnz	LE5B7		;jmp if hex digit
+E5B3 : 2A 6B E9 	"*k "		lhld	$E96B		;else return with hex value
+E5B6 : C9 		" "		ret			;
+                                ;
+E5B7				LE5B7:
+E5B7 : 2A 6B E9 	"*k "		lhld	$E96B		;hex value
+E5BA : 29 		")"		dad	h
+E5BB : 29 		")"		dad	h		;shift hex value
+E5BC : 29 		")"		dad	h
+E5BD : 29 		")"		dad	h		
+E5BE : E5 		" "		push	h
+E5BF : 2A 65 E9 	"*e "		lhld	$E965		;clear memory byte?
+E5C2 : 26 00 		"& "		mvi	h,$00
+E5C4 : C1 		" "		pop	b		
+E5C5 : 09 		" "		dad	b		;add hex digit
+E5C6 : 22 6B E9 	""k "		shld	$E96B		;store new valie
+E5C9 : 21 63 E9 	"!c "		lxi	h,$E963
+E5CC : 36 FF 		"6 "		mvi	m,$FF		;signal new value?
+E5CE : C3 A1 E5 	"   "		jmp	LE5A1		;loop
+E5D1 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Expect Numbers
+                                ;------------------------------
+
+                                ;Expect C hexadecimal numbers for input.
+                                ;When expecting more then one number the 1st number
+                                ; must be smaller then 2nd number.
+
+                                ;Entry:
+                                        C= expected numbers [1..4]
+                                ;Exit:
+                                        A=00 Error, FF Input OK
+
+                                ;E957 1st word (start/drive)
+                                ;E959 2nd word (end/byte)
+                                ;E95B 3rd word (byte/)
+                                ;E95D 4rd word (DMA address)
+                                ;E95F 1st byte \
+                                ;E960 2nd byte  not used
+                                ;E961 3rd byte
+                                ;E962 4rd byte /
+                                ;E963 LSB of WORD ?
+                                ;E064 number index
+                                ;
+                                ;EO6D expected word count
+
+E5D2				LE5D2:
+E5D2 : 21 6D E9 	"!m "		lxi	h,$E96D		;required count
+E5D5 : 71 		"q"		mov	m,c		;store number of bytes
+E5D6 : 21 64 E9 	"!d "		lxi	h,$E964		;buffer size
+E5D9 : 36 00 		"6 "		mvi	m,$00		;no bytes
+E5DB				LE5DB:
+E5DB : 3A 6D E9 	":m "		lda	$E96D		;expected bytes
+E5DE : 3D 		"="		dcr	a
+E5DF : 21 64 E9 	"!d "		lxi	h,$E964		;buffer size
+E5E2 : BE 		" "		cmp	m
+E5E3 : DA 38 E6 	" 8 "		jc	LE638		;jump got required bytes
+
+E5E6 : CD 96 E5 	"   "		call	LE596		;Get Hex number
+E5E9 : E5 		" "		push	h		;save
+E5EA : 2A 64 E9 	"*d "		lhld	$E964		;buffer index
+E5ED : 26 00 		"& "		mvi	h,$00
+E5EF : 01 57 E9 	" W "		lxi	b,$E957		;word Buffer
+E5F2 : 29 		")"		dad	h		;2 bytes per entry
+E5F3 : 09 		" "		dad	b		;get buffer address
+E5F4 : C1 		" "		pop	b		;get word
+E5F5 : 71 		"q"		mov	m,c		;store LSB
+E5F6 : 23 		"#"		inx	h
+E5F7 : 70 		"p"		mov	m,b		;Store MSB
+E5F8 : 2A 64 E9 	"*d "		lhld	$E964		;pos
+E5FB : 26 00 		"& "		mvi	h,$00		;
+E5FD : 01 5F E9 	" _ "		lxi	b,$E95F		;2nd buffer
+E600 : 09 		" "		dad	b		
+E601 : 3A 63 E9 	":c "		lda	$E963		;byte value
+E604 : 77 		"w"		mov	m,a
+E605 : 3A 6D E9 	":m "		lda	$E96D		;required count
+E608 : 3D 		"="		dcr	a		;-1
+E609 : 21 64 E9 	"!d "		lxi	h,$E964		;input count
+E60C : 96 		" "		sub	m
+E60D : C6 FF 		"  "		adi	$FF		
+E60F : 9F 		" "		sbb	a		;FF,CY <> 0
+E610 : F5 		" "		push	psw		
+E611 : 3A 66 E9 	":f "		lda	$E966		;KEY	
+E614 : D6 2C 		" ,"		sui	$2C		;test if non hex key was seperator
+E616 : C6 FF 		"  "		adi	$FF
+E618 : 9F 		" "		sbb	a
+E619 : 6E 		"n"		mov	l,m		;
+E61A : 26 00 		"& "		mvi	h,$00
+E61C : 09 		" "		dad	b
+E61D : F5 		" "		push	psw		;
+E61E : 7E 		"~"		mov	a,m
+E61F : D6 00 		"  "		sui	$00
+E621 : D6 01 		"  "		sui	$01
+E623 : 9F 		" "		sbb	a
+E624 : C1 		" "		pop	b
+E625 : 48 		"H"		mov	c,b	
+E626 : B1 		" "		ora	c
+E627 : C1 		" "		pop	b
+E628 : 48 		"H"		mov	c,b
+E629 : A1 		" "		ana	c
+E62A : 1F 		" "		rar
+E62B : D2 31 E6 	" 1 "		jnc	LE631		;Expect more
+
+E62E : 3E 00 		"> "		mvi	a,$00		;error ?
+E630 : C9 		" "		ret
+
+                                ;-get next number -
+
+E631				LE631:
+E631 : 21 64 E9 	"!d "		lxi	h,$E964	;inc number count
+E634 : 34 		"4"		inr	m	
+E635 : C2 DB E5 	"   "		jnz	LE5DB	;max 256 numbers
+
+                                ;- got expected numbers -
+
+E638				LE638:
+E638 : 3E 01 		"> "		mvi	a,$01		
+E63A : 21 6D E9 	"!m "		lxi	h,$E96D	
+E63D : 96 		" "		sub	m
+E63E : 9F 		" "		sbb	a		;FF when more then 1 number is expected
+E63F : 11 59 E9 	" Y "		lxi	d,$E959		;2nd number end ?
+E642 : 01 57 E9 	" W "		lxi	b,$E957		;1st number start?
+E645 : F5 		" "		push	psw
+E646 : CD 2F E9 	" / "		call	LE92F		;HL=WORD(DE)-WORD(BC)
+E649 : 9F 		" "		sbb	a		
+E64A : F5 		" "		push	psw
+E64B : 3A 66 E9 	":f "		lda	$E966		;KEY
+E64E : D6 0D 		"  "		sui	$0D		;Test last key was Enter
+E650 : C6 FF 		"  "		adi	$FF
+E652 : 9F 		" "		sbb	a
+E653 : C1 		" "		pop	b
+E654 : 48 		"H"		mov	c,b
+E655 : B1 		" "		ora	c
+E656 : C1 		" "		pop	b
+E657 : 48 		"H"		mov	c,b
+E658 : A1 		" "		ana	c		
+E659 : 1F 		" "		rar
+E65A : D2 60 E6 	" ` "		jnc	LE660		;jump numbers OK
+
+E65D : 3E 00 		"> "		mvi	a,$00		;error if not Enter or start>end
+E65F : C9 		" "		ret
+                                ;
+E660				LE660:
+E660 : 3E FF 		"> "		mvi	a,$FF		;success
+E662 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Print CRLF
+                                ;------------------------------
+
+E663				LE663:
+E663 : 0E 0D 		"  "		mvi	c,$0D
+E665 : CD 4D E4 	" M "		call	LE44D		;print char
+E668 : 0E 0A 		"  "		mvi	c,$0A
+E66A : CD 4D E4 	" M "		call	LE44D		;print char
+E66D : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Print zero terminated string
+                                ;------------------------------
+
+                                ;Entry:
+                                ;       BC = pointer to zero terminated string
+
+E66E				LE66E:
+E66E : 21 6F E9 	"!o "		lxi	h,$E96F	;temp string pointer
+E671 : 70 		"p"		mov	m,b	;MSB string
+E672 : 2B 		"+"		dcx	h	
+E673 : 71 		"q"		mov	m,c	;LSB string
+E674				LE674:
+E674 : 2A 6E E9 	"*n "		lhld	$E96E	;get String addr
+E677 : 3E 00 		"> "		mvi	a,$00	;String end
+E679 : BE 		" "		cmp	m	;CY if <> 0
+E67A : D2 8E E6 	"   "		jnc	LE68E	;jump end of string
+E67D : 2A 6E E9 	"*n "		lhld	$E96E	
+E680 : 4E 		"N"		mov	c,m	;get char
+E681 : CD 4D E4 	" M "		call	LE44D		;print char
+E684 : 2A 6E E9 	"*n "		lhld	$E96E
+E687 : 23 		"#"		inx	h	;inc string addr
+E688 : 22 6E E9 	""n "		shld	$E96E
+E68B : C3 74 E6 	" t "		jmp	LE674	;loop
+E68E				LE68E:
+E68E : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Print Error Number (not used)
+                                ;------------------------------
+
+E68F : 21 70 E9 	"!p "		lxi	h,$E970		;Store error code
+E692 : 71 		"q"		mov	m,c
+E693 : 01 B0 E4 	"   "		lxi	b,$E4B0		;'Error #' string
+E696 : CD 6E E6 	" n "		call	LE66E		;Print string
+E699 : 2A 70 E9 	"*p "		lhld	$E970		;
+E69C : 4D 		"M"		mov	c,l
+E69D : CD 19 E5 	"   "		call	LE519		;Print HEX byte
+E6A0 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;Command D sub Dump Memory to CRT
+                                ;------------------------------
+
+                                ;command syntax: D Start End
+
+                                ;Dumps memory from Start to End 16 bytes per line
+
+E6A1				LE6A1:
+E6A1 : 0E 02 		"  "		mvi	c,$02		;Start and End
+E6A3 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E6A6 : FE 00 		"  "		cpi	$00
+E6A8 : C2 AC E6 	"   "		jnz	LE6AC		;continue when Numbers OK
+E6AB : C9 		" "		ret			;ret on error
+                                ;
+E6AC				LE6AC:
+E6AC : 2A 57 E9 	"*W "		lhld	$E957	;get start addr
+E6AF : 22 55 E9 	""U "		shld	$E955	;set mem ptr
+
+                                ;dump loop
+
+E6B2				LE6B2:
+E6B2 : 11 59 E9 	" Y "		lxi	d,$E959	;End addr ptr
+E6B5 : 01 55 E9 	" U "		lxi	b,$E955	;cur ptr
+E6B8 : CD 2F E9 	" / "		call	LE92F	;HL=WORD(DE)-WORD(BC) END-CUR
+E6BB : DA 06 E7 	"   "		jc	LE706	;jump beyond the end
+E6BE : 01 57 E9 	" W "		lxi	b,$E957	;Start addr ptr
+E6C1 : 11 55 E9 	" U "		lxi	d,$E955	;cur ptr
+E6C4 : CD 2F E9 	" / "		call	LE92F	;HL=WORD(DE)-WORD(BC) CUR-START
+E6C7 : B5 		" "		ora	l       
+E6C8 : D6 01 		"  "		sui	$01
+E6CA : 9F 		" "		sbb	a
+E6CB : F5 		" "		push	psw	;FF if CUR=START
+E6CC : 3E 0F 		"> "		mvi	a,$0F
+E6CE : 1B 		" "		dcx	d
+E6CF : CD 18 E9 	"   "		call	LE918	;HL=WORD(DE) AND WORD(A) (CUR-1) AND F
+E6D2 : 3E 00 		"> "		mvi	a,$00      
+E6D4 : CD 25 E9 	" % "		call	LE925	;HL=A-HL NEGATE
+E6D7 : B5 		" "		ora	l               
+E6D8 : D6 01 		"  "		sui	$01
+E6DA : 9F 		" "		sbb	a	;FF if L was 00
+E6DB : C1 		" "		pop	b
+E6DC : 48 		"H"		mov	c,b     ;CUR=STRART
+E6DD : B1 		" "		ora	c       ;or (CUR AND F)=0
+E6DE : 1F 		" "		rar
+E6DF : D2 ED E6 	"   "		jnc	LE6ED	;skip every 16 bytes
+
+                                ;print memory address
+
+E6E2 : CD 63 E6 	" c "		call	LE663		;Print CRLF
+E6E5 : 2A 55 E9 	"*U "		lhld	$E955		;mem ptr
+E6E8 : 44 		"D"		mov	b,h		;print mem ptr
+E6E9 : 4D 		"M"		mov	c,l
+E6EA : CD 42 E5 	" B "		call	LE542		;Print HEX word
+
+                                ;
+
+E6ED				LE6ED:
+E6ED : 0E 20 		"  "		mvi	c,$20		;space
+E6EF : CD 4D E4 	" M "		call	LE44D		;print char
+E6F2 : 2A 55 E9 	"*U "		lhld	$E955		;CUR ptr
+E6F5 : 4E 		"N"		mov	c,m		;mem byte
+E6F6 : CD 19 E5 	"   "		call	LE519		;Print HEX byte
+E6F9 : 11 01 00 	"   "		lxi	d,$0001
+E6FC : 2A 55 E9 	"*U "		lhld	$E955
+E6FF : 19 		" "		dad	d		;CUR+1
+E700 : 22 55 E9 	""U "		shld	$E955
+E703 : D2 B2 E6 	"   "		jnc	LE6B2		;no overflow to addr 0
+E706				LE706:
+E706 : C9 		" "		ret
+
+                                ;-------------------------------
+                                ;command G sub (Execute Code)
+                                ;-------------------------------
+
+E707				LE707:
+E707 : 0E 01 		"  "		mvi	c,$01
+E709 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E70C : 32 62 E9 	"2b "		sta	$E962		;store number status
+E70F : 3A 66 E9 	":f "		lda	$E966		;KEY
+E712 : FE 0D 		"  "		cpi	$0D
+E714 : CA 18 E7 	"   "		jz	LE718		;continue was Enter
+E717 : C9 		" "		ret
+
+                                ;
+
+E718				LE718:
+E718 : 3A 5F E9 	":_ "		lda	$E95F		;hex number?
+E71B : 1F 		" "		rar
+E71C : D2 25 E7 	" % "		jnc	LE725		;skip
+
+E71F : 2A 57 E9 	"*W "		lhld	$E957		;1st number
+E722 : 22 52 E9 	""R "		shld	$E952		;temp save
+E725				LE725:
+E725 : 21 2D E7 	"!- "		lxi	h,$E72D		;return address
+E728 : E5 		" "		push	h
+E729 : 2A 52 E9 	"*R "		lhld	$E952		;get addr
+E72C : E9 		" "		pchl			;execute
+E72D : C9 		" "		ret
+
+                                ;command M sub (move start end,target)
+
+E72E				LE72E:
+E72E : 0E 03 		"  "		mvi	c,$03
+E730 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E733 : FE 00 		"  "		cpi	$00
+E735 : C2 39 E7 	" 9 "		jnz	LE739		;continue valid numbers
+E738 : C9 		" "		ret
+                                ;
+E739				LE739:
+E739 : 01 57 E9 	" W "		lxi	b,$E957		;start
+E73C : 11 59 E9 	" Y "		lxi	d,$E959		;end
+E73F : CD 2F E9 	" / "		call	LE92F		;HL=WORD(DE)-WORD(BC)
+E742 : 23 		"#"		inx	h
+E743 : E5 		" "		push	h
+E744 : 2A 57 E9 	"*W "		lhld	$E957		;1st number source
+E747 : 44 		"D"		mov	b,h
+E748 : 4D 		"M"		mov	c,l
+E749 : 2A 5B E9 	"*[ "		lhld	$E95B		;3rd number target
+E74C : EB 		" "		xchg
+E74D : E1 		" "		pop	h		;length
+E74E				LE74E:
+E74E : 0A 		" "		ldax	b		;(start)
+E74F : 12 		" "		stax	d		;(target)
+E750 : 03 		" "		inx	b
+E751 : 13 		" "		inx	d
+E752 : 2B 		"+"		dcx	h
+E753 : 7C 		"|"		mov	a,h
+E754 : B5 		" "		ora	l
+E755 : C2 4E E7 	" N "		jnz	LE74E
+E758 : C9 		" "		ret
+
+                                ;command F sub (Fill Start End byte)
+
+E759				LE759:
+E759 : 0E 03 		"  "		mvi	c,$03
+E75B : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E75E : FE 00 		"  "		cpi	$00
+E760 : C2 64 E7 	" d "		jnz	LE764		;continue valid numbers
+E763 : C9 		" "		ret
+                                ;
+E764				LE764:
+E764 : 2A 57 E9 	"*W "		lhld	$E957		;start
+E767 : 22 55 E9 	""U "		shld	$E955		;current
+E76A				LE76A:
+E76A : 11 59 E9 	" Y "		lxi	d,$E959		;end
+E76D : 01 55 E9 	" U "		lxi	b,$E955		;current
+E770 : CD 2F E9 	" / "		call	LE92F		;HL=WORD(DE)-WORD(BC)
+E773 : DA 8D E7 	"   "		jc	LE78D		;jump end
+
+E776 : 2A 55 E9 	"*U "		lhld	$E955		;current
+E779 : E5 		" "		push	h
+E77A : 2A 5B E9 	"*[ "		lhld	$E95B		;3rd number
+E77D : EB 		" "		xchg
+E77E : E1 		" "		pop	h
+E77F : 73 		"s"		mov	m,e		;store
+E780 : 11 01 00 	"   "		lxi	d,$0001
+E783 : 2A 55 E9 	"*U "		lhld	$E955
+E786 : 19 		" "		dad	d		;inc pointer
+E787 : 22 55 E9 	""U "		shld	$E955
+E78A : D2 6A E7 	" j "		jnc	LE76A		;loop until overflow to 0
+E78D				LE78D:
+E78D : C9 		" "		ret
+
+                                ;--------------------------------
+
+                                ;Command S sub
+
+                                ;Store Byte
+
+                                ;Syntax: S Addr[SPACE](Byte[SPACE byte byte ...)
+
+                                ;old byte is printed to CRT new byte is expected or enter to skip
+
+E78E				LE78E:
+E78E : 0E 01 		"  "		mvi	c,$01		;one number
+E790 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E793 : 32 62 E9 	"2b "		sta	$E962           ;rsult
+E796 : 3A 66 E9 	":f "		lda	$E966		;last KEY ?
+E799 : D6 20 		"  "		sui	$20		;Test if was SPACE
+E79B : C6 FF 		"  "		adi	$FF
+E79D : 9F 		" "		sbb	a		;0 if SPACE
+E79E : F5 		" "		push	psw		;save it
+E79F : 3A 5F E9 	":_ "		lda	$E95F		;number status
+E7A2 : D6 00 		"  "		sui	$00
+E7A4 : D6 01 		"  "		sui	$01		
+E7A6 : 9F 		" "		sbb	a		;FF if A was 00
+E7A7 : C1 		" "		pop	b
+E7A8 : 48 		"H"		mov	c,b		;
+E7A9 : B1 		" "		ora	c
+E7AA : 1F 		" "		rar
+E7AB : D2 AF E7 	"   "		jnc	LE7AF		;continue if valid number and SPACE key
+E7AE : C9 		" "		ret
+                                ;
+E7AF				LE7AF:
+E7AF : 2A 57 E9 	"*W "		lhld	$E957		;1st number
+E7B2 : 22 55 E9 	""U "		shld	$E955		;current
+E7B5				LE7B5:
+E7B5 : 2A 55 E9 	"*U "		lhld	$E955		;Current
+E7B8 : 4E 		"N"		mov	c,m		;read current byte
+E7B9 : CD 19 E5 	"   "		call	LE519		;Print HEX byte
+E7BC : 0E 2D 		" -"		mvi	c,$2D		;- seperator
+E7BE : CD 4D E4 	" M "		call	LE44D		;print char
+E7C1 : 0E 01 		"  "		mvi	c,$01           ;1 number
+E7C3 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E7C6 : 32 62 E9 	"2b "		sta	$E962		;status
+E7C9 : 3A 66 E9 	":f "		lda	$E966		;KEY
+E7CC : D6 0D 		"  "		sui	$0D		;test was Enter key
+E7CE : C6 FF 		"  "		adi	$FF
+E7D0 : 9F 		" "		sbb	a
+E7D1 : F5 		" "		push	psw
+E7D2 : 3A 66 E9 	":f "		lda	$E966		;KEY
+E7D5 : D6 20 		"  "		sui	$20		;test space
+E7D7 : C6 FF 		"  "		adi	$FF
+E7D9 : 9F 		" "		sbb	a
+E7DA : C1 		" "		pop	b
+E7DB : 48 		"H"		mov	c,b             ;not Enter Key
+E7DC : A1 		" "		ana	c               ;and not Space key
+E7DD : 1F 		" "		rar                     ;
+E7DE : D2 E2 E7 	"   "		jnc	LE7E2		;continue if SPACE or ENTER
+E7E1 : C9 		" "		ret			;else end
+
+                                ;
+                                
+E7E2				LE7E2:
+E7E2 : 3A 5F E9 	":_ "		lda	$E95F		;test valid number
+E7E5 : 1F 		" "		rar
+E7E6 : D2 F3 E7 	"   "		jnc	LE7F3		;skip no number 
+
+                                ;store numbe at pointer
+                                
+E7E9 : 2A 55 E9 	"*U "		lhld	$E955		;current
+E7EC : E5 		" "		push	h
+E7ED : 2A 57 E9 	"*W "		lhld	$E957		;1st number
+E7F0 : EB 		" "		xchg
+E7F1 : E1 		" "		pop	h
+E7F2 : 73 		"s"		mov	m,e		;Store byte
+
+E7F3				LE7F3:
+E7F3 : 2A 55 E9 	"*U "		lhld	$E955		;inc current pointer
+E7F6 : 23 		"#"		inx	h
+E7F7 : 22 55 E9 	""U "		shld	$E955
+E7FA : 3A 66 E9 	":f "		lda	$E966		;KEY
+E7FD : FE 0D 		"  "		cpi	$0D
+E7FF : C2 03 E8 	"   "		jnz	LE803		;loop if not Enter
+E802 : C9 		" "		ret
+
+E803				LE803:
+E803 : C3 B5 E7 	"   "		jmp	LE7B5		;loop
+E806 : C9 		" "		ret
+
+                                ;--------------------------------
+                                ;disk command sub
+                                ;--------------------------------
+
+
+                                ;	c=3,4,6 = disk command 
+
+                                ;E971 entry C reg
+
+                                ;e972 80 sector size/drive number ?
+                                ;E973 entry C(command) + 16 * 1st number (drive/head?)
+                                ;E974 01 (sector count)
+                                ;E975 2nd number byte (track)
+                                ;E976 3rd number byte (sector)
+                                ;E977 4th number Word (target addr)
+
+E807				LE807:
+E807 : 21 71 E9 	"!q "		lxi	h,$E971		;
+E80A : 71 		"q"		mov	m,c		;Store C
+
+E80B : 21 72 E9 	"!r "		lxi	h,$E972		;disk data
+E80E : 36 80 		"6 "		mvi	m,$80		;size
+E810 : 2A 57 E9 	"*W "		lhld	$E957		;get 1st number
+E813 : 29 		")"		dad	h
+E814 : 29 		")"		dad	h
+E815 : 29 		")"		dad	h
+E816 : 29 		")"		dad	h		;*16
+E817 : EB 		" "		xchg
+E818 : 2A 71 E9 	"*q "		lhld	$E971		;HL = entry C reg
+E81B : 26 00 		"& "		mvi	h,$00
+E81D : 19 		" "		dad	d		;entry C +(1st number*16)
+E81E : EB 		" "		xchg
+E81F : 21 73 E9 	"!s "		lxi	h,$E973		;
+E822 : 73 		"s"		mov	m,e
+E823 : 23 		"#"		inx	h		
+E824 : 36 01 		"6 "		mvi	m,$01		;E974
+E826 : E5 		" "		push	h
+E827 : 2A 59 E9 	"*Y "		lhld	$E959		;2nd number
+E82A : EB 		" "		xchg
+E82B : E1 		" "		pop	h
+E82C : 23 		"#"		inx	h
+E82D : 73 		"s"		mov	m,e		;E975
+E82E : 2A 5B E9 	"*[ "		lhld	$E95B		;3rd number
+E831 : EB 		" "		xchg
+E832 : 21 76 E9 	"!v "		lxi	h,$E976		;
+E835 : 73 		"s"		mov	m,e
+E836 : 2A 5D E9 	"*] "		lhld	$E95D		;4th number
+E839 : 7D 		"}"		mov	a,l
+E83A : 32 77 E9 	"2w "		sta	$E977		;
+E83D : 2A 5D E9 	"*] "		lhld	$E95D		;
+E840 : 7C 		"|"		mov	a,h
+E841 : 32 78 E9 	"2x "		sta	$E978
+E844 : 01 72 E9 	" r "		lxi	b,$E972		;Data
+E847 : CD 5B E4 	" [ "		call	LE45B		;Disk I/O
+E84A : C9 		" "		ret
+
+                                ;--------------------------------
+                                ;command R sub read sector
+
+E84B				LE84B:
+E84B : 0E 04 		"  "		mvi	c,$04		;4 parameters
+E84D : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E850 : 32 62 E9 	"2b "		sta	$E962		;store result
+E853 : 0E 04 		"  "		mvi	c,$04		;read sector command
+E855 : CD 07 E8 	"   "		call	LE807		;Disk command
+E858 : 1F 		" "		rar
+E859 : D2 61 E8 	" a "		jnc	LE861		;error ?
+
+E85C : 0E 23 		" #"		mvi	c,$23		; #
+E85E : CD 4D E4 	" M "		call	LE44D		;print char
+E861				LE861:
+E861 : C9 		" "		ret
+
+                                ;Command 5 : W Write sector
+
+E862				LE862:
+E862 : 0E 04 		"  "		mvi	c,$04		
+E864 : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E867 : 32 62 E9 	"2b "		sta	$E962		;
+E86A : 0E 06 		"  "		mvi	c,$06		;write sector command
+E86C : CD 07 E8 	"   "		call	LE807		;Disk command
+E86F : 1F 		" "		rar
+E870 : D2 78 E8 	" x "		jnc	LE878
+
+E873 : 0E 23 		" #"		mvi	c,$23		;"#"
+E875 : CD 4D E4 	" M "		call	LE44D		;print char
+E878				LE878:
+E878 : C9 		" "		ret
+
+                                ;-------------------------------
+                                ;command C recalibrate drive
+                                ;-------------------------------
+                                
+E879				LE879:
+E879 : 0E 01 		"  "		mvi	c,$01           ;one parameter
+E87B : CD D2 E5 	"   "		call	LE5D2		;Expect Numbers
+E87E : 32 62 E9 	"2b "		sta	$E962		;valid number
+E881 : 0E 03 		"  "		mvi	c,$03		;recalibtrate disk command
+E883 : CD 07 E8 	"   "		call	LE807		;Disk command
+E886 : 1F 		" "		rar
+E887 : D2 8F E8 	"   "		jnc	LE88F		;skip error?
+
+E88A : 0E 23 		" #"		mvi	c,$23		;#
+E88C : CD 4D E4 	" M "		call	LE44D		;print char
+E88F				LE88F:
+E88F : C9 		" "		ret
+
+                                ;-------------------------------
+                                ;Monitor Program
+                                ;-------------------------------
+
+E890				LE890:
+E890 : 01 BA E4 	"   "		lxi	b,$E4BA		;Monitor version string
+E893 : CD 6E E6 	" n "		call	LE66E		;Print string
+
+                                ;Monitor loop
+
+E896				LE896:
+E896 : CD 63 E6 	" c "		call	LE663		;Print CRLF
+E899 : 0E 2A 		" *"		mvi	c,"*"
+E89B : CD 4D E4 	" M "		call	LE44D		;print char
+E89E : CD 59 E5 	" Y "		call	LE559		;Get key
+E8A1 : D6 41 		" A"		sui	"A"
+E8A3 : 32 65 E9 	"2e "		sta	$E965
+E8A6 : 3E 19 		"> "		mvi	a,$19		;"Z"-"A"
+E8A8 : 21 65 E9 	"!e "		lxi	h,$E965
+E8AB : BE 		" "		cmp	m
+E8AC : DA 14 E9 	"   "		jc	LE914		;main loop		;jump not "A" to "Z"
+E8AF : 2A 65 E9 	"*e "		lhld	$E965		
+E8B2 : 26 00 		"& "		mvi	h,$00		;H=command index
+E8B4 : 01 84 E4 	"   "		lxi	b,$E484		;command table
+E8B7 : 09 		" "		dad	b
+E8B8 : 4E 		"N"		mov	c,m		;get command index
+E8B9 : 06 00 		"  "		mvi	b,$00
+E8BB : 21 FE E8 	"!  "		lxi	h,$E8FE		;command addr table
+E8BE : 09 		" "		dad	b
+E8BF : 09 		" "		dad	b
+E8C0 : 5E 		"^"		mov	e,m		;get command addr
+E8C1 : 23 		"#"		inx	h
+E8C2 : 56 		"V"		mov	d,m
+E8C3 : EB 		" "		xchg
+E8C4 : E9 		" "		pchl			;execute command
+
+                                ;Command 0 : No action
+
+E8C5 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 1 : D
+
+E8C8 : CD A1 E6 	"   "		call	LE6A1
+E8CB : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 2 : S
+
+E8CE : CD 8E E7 	"   "		call	LE78E
+E8D1 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 3 : F
+
+E8D4 : CD 59 E7 	" Y "		call	LE759
+E8D7 : C3 14 E9 	"   "		jmp	LE914		;main loop
+                                ;Command 4 : M
+
+E8DA : CD 2E E7 	" . "		call	LE72E
+E8DD : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 5 W
+
+E8E0 : CD 62 E8 	" b "		call	LE862
+E8E3 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 6 C Recalibrate disk
+
+E8E6 : CD 79 E8 	" y "		call	LE879
+E8E9 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 7
+
+E8EC : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 8 : G addr
+
+E8EF : CD 07 E7 	"   "		call	LE707		;
+E8F2 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 9 : R
+
+E8F5 : CD 4B E8 	" K "		call	LE84B
+E8F8 : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;Command 0A
+
+E8FB : C3 14 E9 	"   "		jmp	LE914		;main loop
+
+                                ;------------------------------
+                                ;Command address table
+                                ;------------------------------
+
+                                ;Commands
+                                ;---------
+
+                                ;all numbers are in hexadecimal. Leading zeros are not neccesary.
+                                ;ie 0 is same as 0000.
+
+                                ;Note that there is no edit function and numbers have to be entered
+                                ;without mistakes. a non hex character is interpreted as SPACE/ENTER.
+
+                                ;Dxxxx,xxxx
+                                ;Fxxxx,xxxx,xx
+                                ;Mxxxx
+                                ;Sxxxx[SPACE]xx[SPACE] .. xx[SPACE][ENTER]
+
+                                ;Select adress xxxx.After space the byte at the selected address id displayed.
+                                ;enter a byte to change the byte or space to skip to next address.
+
+                                xE8FE:	DW	xE8C5	;0    No command		Do nothing
+                                        DW	xE8C8	;1  D Start,End			Dump memory to CRT
+                                        DW	xE8CE	;2  S Start (byte/Enter)	old byte is printed to CRT enter new byte or Enter to skip
+                                        DW	xE8D4	;3  F Start,End,Byte		Fill memory from START to END with BYTE
+                                        DW	xE8DA	;4  M Start,End,Target		Move bytes from START to END to TARGET
+                                        DW	xE8E0	;5  W drive,track,sector,addr	Write sector 
+                                        DW	xE8E6	;6  C drive              	Recalibrate disk
+                                        DW	xE8EC	;7    No command		Do nothing
+                                        DW	xE8EF	;8  G addr			Execute code at ADDR
+                                        DW	xE8F5 	;9  R drive,track,sector,addr	Read sector
+                                        DW	xE8FB	;A    No command		Do nothing
+
+                                ;jump back to monitor main loop
+
+E914: C3 96 E8 	"   "		LE914:	jmp	LE896	;monitor main loop
+
+                                ;------------------------------
+
+E917 : C9 		" "		ret
+
+                                ;------------------------------
+                                ;HL=WORD(DE) AND WORD(A)
+                                ;------------------------------
+
+E918				LE918:
+E918 : EB 		" "		xchg
+E919 : 5F 		"_"		mov	e,a		;HL=A
+E91A : 16 00 		"  "		mvi	d,$00
+E91C : EB 		" "		xchg
+E91D : 1A 		" "		ldax	d		;
+E91E : A5 		" "		ana	l		;HL=WORD(DE) AND WORD(A)
+E91F : 6F 		"o"		mov	l,a
+E920 : 13 		" "		inx	d
+E921 : 1A 		" "		ldax	d
+E922 : A4 		" "		ana	h
+E923 : 67 		"g"		mov	h,a
+E924 : C9 		" "		ret
+
+                                ;HL=A-HL
+
+E925				LE925:
+E925 : 5F 		"_"		mov	e,a	;DE=A
+E926 : 16 00 		"  "		mvi	d,$00
+E928 : 7B 		"{"		mov	a,e
+E929 : 95 		" "		sub	l
+E92A : 6F 		"o"		mov	l,a	;HL=DE-HL
+E92B : 7A 		"z"		mov	a,d
+E92C : 9C 		" "		sbb	h
+E92D : 67 		"g"		mov	h,a
+E92E : C9 		" "		ret
+
+                                ;HL=WORD(DE)-WORD(HL)
+
+E92F				LE92F:
+E92F : 69 		"i"		mov	l,c	;HL=BC
+E930 : 60 		"`"		mov	h,b
+E931 : 4E 		"N"		mov	c,m	;BC=(HL)
+E932 : 23 		"#"		inx	h
+E933 : 46 		"F"		mov	b,m
+E934 : 1A 		" "		ldax	d	;BC
+E935 : 91 		" "		sub	c
+E936 : 6F 		"o"		mov	l,a	;HL=WORD(DE)-WORD(BC)
+E937 : 13 		" "		inx	d
+E938 : 1A 		" "		ldax	d
+E939 : 98 		" "		sbb	b
+E93A : 67 		"g"		mov	h,a
+E93B : C9 		" "		ret
+
+                                ;------------------------------
+                                ;unused
+                                ;------------------------------
+                                
+E93C : FF 		" "		rst	7
+E93D : FF 		" "		rst	7
+E93E : FF 		" "		rst	7
+E93F : FF 		" "		rst	7
+E940 : FF 		" "		rst	7
+E941 : FF 		" "		rst	7
+E942 : FF 		" "		rst	7
+E943 : FF 		" "		rst	7
+E944 : FF 		" "		rst	7
+E945 : FF 		" "		rst	7
+E946 : FF 		" "		rst	7
+E947 : FF 		" "		rst	7
+E948 : FF 		" "		rst	7
+E949 : FF 		" "		rst	7
+E94A : FF 		" "		rst	7
+E94B : FF 		" "		rst	7
+E94C : FF 		" "		rst	7
+E94D : FF 		" "		rst	7
+E94E : FF 		" "		rst	7
+E94F : FF 		" "		rst	7
+E950 : FF 		" "		rst	7
+E951 : FF 		" "		rst	7
+E952 : FF 		" "		rst	7
+E953 : FF 		" "		rst	7
+E954 : FF 		" "		rst	7
+
+                                ;----------------------------------
+                                ;Monitor RAM Variables
+                                ;----------------------------------
+
+E955 : FF 		" "		defw    $FFFF	;current memory pointer
+
+E957 : FF 		" "		defw    $FFFF	;1st parameter as word
+E959 : FF 		" "		defw    $FFFF	;2nd parameter as word
+E95B : FF 		" "		defw    $FFFF	;3rd parameter as word
+E95D : FF 		" "		defw    $FFFF	;4th parameter as word
+E95F : FF 		" "		defb    $FF	;1st parameter as byte
+E960 : FF 		" "		defb    $FF	;2nd parameter as byte
+E961 : FF 		" "		defb    $FF	;3rd parameter as byte
+E962 : FF 		" "		defb    $FF	;4th parameter as byte
+E963 : FF 		" "		defb    $FF     ;input word LSB
+E964 : FF 		" "		defb    $FF     ;parameter count
+
+E965 : FF 		" "		defb    $FF     ;monitor command number
+
+E966 : FF 		" "		defb    $FF	;LASTKEY
+
+E967 : FF 		" "		defb    $FF     ;temp hex ascii digit
+E968 : FF 		" "		defb    $FF     ;temp hex byte
+E969 : FF 		" "		defb    $FF     ;temp hex LSB
+E96A : FF 		" "		defb    $FF     ;temp  hex MSB
+E96B : FF 		" "		defw    $FFFF   ;temp hex word
+E96D : FF 		" "		defb    $FF     ;expected parameters
+E96E : FF 		" "		defw    $FFFF   ;temp print string pointer
+E970 : FF 		" "		defb    $FF	;temp error number
+E971 : FF 		" "		defb    $FF	;temp disk command
+
+                                ;disk command  structure var
+                                
+E972 : FF 		" "		defb    $FF	;SectorSize
+E973 : FF 		" "		defb    $FF	;drive+command
+E974 : FF 		" "		defb    $FF	;sector count
+E975 : FF 		" "		defb    $FF	;Track
+E976 : FF 		" "		defb    $FF	;Sector
+E977 : FFFF 		" "		DW	$FFFF	;DMA address
+
+                                ;--------------------------
+                                ;End of program
+                                ;--------------------------
+
+                                ; E979-EBFF : FF
+
+;--------------------------------------------------------------
+Symbol table
+============
+
+Value	Type	Name
+-----	----	----
+000D	 04	L000D
+0019	 04	L0019
+DAE8	 04	LDAE8
+
+E400	 04	LE400
+E408	 04	LE408
+E41E	 04	LE41E	;I/O Write
+E42C	 04	LE42C	;I/O Read
+E43A	 04	LE43A	;I/O Status
+E446	 04	LE446	;Read key
+E44D	 04	LE44D		;print char
+E45B	 04	LE45B
+E45D	 04	LE45D
+E46D	 04	LE46D
+E481	 04	LE481
+E4D6	 04	LE4D6		;ASCII to HEX
+E4F7	 04	LE4F7
+E516	 04	LE516
+E519	 04	LE519		;Print HEX byte
+E542	 04	LE542		;Print HEX word
+E559	 04	LE559		;Get key
+E585	 04	LE585
+E592	 04	LE592
+E596	 04	LE596		;Get Hex number
+E5A1	 04	LE5A1
+E5B7	 04	LE5B7
+E5D2	 04	LE5D2		;Expect Numbers
+E5DB	 04	LE5DB
+E631	 04	LE631
+E638	 04	LE638
+E660	 04	LE660
+E663	 04	LE663		;Print CRLF
+E66E	 04	LE66E		;Print string
+E674	 04	LE674
+E68E	 04	LE68E
+E6A1	 04	LE6A1		;Command D sub
+E6AC	 04	LE6AC
+E6B2	 04	LE6B2
+E6ED	 04	LE6ED
+E706	 04	LE706
+E707	 04	LE707
+E718	 04	LE718
+E725	 04	LE725
+E72E	 04	LE72E
+E739	 04	LE739
+E74E	 04	LE74E
+E759	 04	LE759
+E764	 04	LE764
+E76A	 04	LE76A
+E78D	 04	LE78D
+E78E	 04	LE78E
+E7AF	 04	LE7AF
+E7B5	 04	LE7B5
+E7E2	 04	LE7E2
+E7F3	 04	LE7F3
+E803	 04	LE803
+E807	 04	LE807		;Disk command
+E84B	 04	LE84B
+E861	 04	LE861
+E862	 04	LE862
+E878	 04	LE878
+E879	 04	LE879
+E88F	 04	LE88F
+E890	 04	LE890
+E896	 04	LE896		;monitor main loop
+E914	 04	LE914		;main loop
+E918	 04	LE918		;HL=WORD(DE) AND WORD(A)
+E925	 04	LE925		;HL=A-HL
+E92F	 04	LE92F
+EFE8	 04	LEFE8
+FE80	 04	LFE80		;BootSectorCode
+
+Number of symbols:			70
+
+;--------------------------------------------------------------

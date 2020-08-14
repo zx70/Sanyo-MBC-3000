@@ -1,0 +1,3639 @@
+				;
+				;	Disassembled by:
+				;		DASMx object code disassembler
+				;		(c) Copyright 1996-1998   Conquest Consultants
+				;		Version 1.20 (Apr  2 1998)
+				;
+				;	File:	D:\computers\Sanyo-MBC-3000\ROM dumps\Motherboard-MA-6-1.bin
+				;	Date:	Sun Jun 29 03:09:50 2008
+				;	CPU:	Intel 8085 (8085 family)
+				;
+				;
+				
+				;-----------------------------------------------
+				;MBC-3000 MOTHERBOARD MA-6-1 disassembly
+				;-----------------------------------------------
+				
+				;The motherboard handles all the communication with the
+                                ;MBC-3000 perhiperal devices (CRT,KEYBOARD,PRINTER,LINE-1,LINE2,DISK)
+				;It communication with the CPU board by accessing the CPU board RAM
+                                ;at addresses FF00-FF29.
+				
+				;MEMORY MAP:
+				
+				;0000-0FFF 4K BIOS ROM
+				;1000-1FFF 4K BDOS ROM
+				;2000-2FFF RAM
+				;8000-FFFF 32K CPUboard RAM bank
+
+				;MEMORY MAPPED I/O:
+				
+				;0000 FE Select CPU board upper 32K RAM bank
+				      FF select CPU board lower 32K RAM bank
+				
+				;I/O MAPPED I/O:
+				
+				;00 I 8255 Port A only bit 0 and 1 are used. SHIFT/CTRL keys?
+				;01 I 8255 Port B Keyboard matrix input
+				;02 O 8255 Port C bits 0..3 Keyboard Row select
+				;03 O 8255 Control $92 Simple mode Port A & B Input, Port C output
+				
+				;04 O   UPD3301 CRTC Data Register
+				;05 I/O UPD3301 CRTC control Register
+				
+				;08 O 8253 COUNTER 0 LINE-1 baudrate devisor
+				;09 O 8253 COUNTER 1 LINE-2 baudrate devisor
+				;0A O 8253 COUNTER 2 [$00 $3C]
+				;0B O 8253 COUNTER CONTROL [$36 $76 $b6]
+				
+				;0C O 8253 COUNTER 0 user timer device C
+				;0D O 8253 COUNTER 1 [$00 $06]
+				;0E O 8253 COUNTER 2 [$0A $00]
+				;0F O 8253 COUNTER CONTROL [$34 $76 $BA]
+				
+				;20 I/O LINE-1 8251 DATA
+				;21 I/O LINE-1 8251 CONTROL
+				
+				;30 I/O LINE-2 8251 DATA
+				;31 I/O LINE-2 8251 CONTROL
+				
+				;40 I	FDC STATUS
+				;41 I/O FDC DATA 
+				
+				;50 O	8255 PPI Port A	DEVICE 3 PRINTER
+				;51 I	8255 PPI Port B
+				;52 I/O	8255 PPI Port C
+				;53 O	8255 PPI control
+				
+				;60 O	8257 DMA Controller FDD address [LSB MSB]
+				;61 O   8257 DMA Controller FDD count   [LSB MSB]
+				
+				;64 O	8257 DMA Controller UPD3301 CRT address [00 20]
+				;65 O	8257 DMA Controller UPD3301 CRT count [B8 8B]
+				
+				;68 O	8257 DMA Controller control $00/$74/$75
+
+				;--------------------
+				
+				;There are 13 Devices:
+				
+				;0 Diagnostics Device
+				;1 Keyboard  
+				;2 CRT display
+				;3 parallel Printer
+				;4 LINE-1 Control
+				;5 LINE-1 Input
+				;6 LINE-1 Output
+				;7 LINE-2 Control
+				;8 LINE-2 Input
+				;9 LINE-2 Output
+				;A read/write 6 byte structure
+				;B floppydisk drive
+				;C set 8253 Timer 0
+				
+				;Diagnostics Device 0
+				;--------------------
+				
+				;When WORD at FF02 is 0000 The I/O Boards ROM and RAM test
+				;routine is executed and it's test result is stored at FF00.
+				;Where 00 = OK, 01-ROM error, 02=RAM error.
+				
+				;When WORD at FF02 is non zero. the I/O boards CPU executes
+                                ;the code at the given address in CPUBOARD RAM. Note that the
+                                ;CPU RAM is only accessable in 32K blocks at the  upper 32K
+				;So the codes origin must be 8000+
+                                
+                                ;Device 0 makes it possible to access the motherboards hardware
+                                ;directly.
+				
+				;LINE-1 Control Device 4
+				;-----------------------
+				
+				;FF0C 8251 Asynch mode command(baudrate factor is always set to 16x factor)
+				;FF0D 0..6 Selects baudrate, 7 reset controller
+				
+				;Baudrate: 0=19200,1=9600,2=4800,3=2400,4=1200,5=600,6=300
+				;Mode:
+				
+				;	00 5 Bits character length
+				;	04 6 Bits character length
+				;	08 7 Bits character length
+				;	0C 8 Bits character length
+				
+				;       00 No parity
+				;       10 Use parity
+				
+				;	00 Odd parity
+				;	20 even parity
+				
+				;	40 1   Stop bit
+				;	80 1.5 Stop bits
+				;	C0 2   stop bits
+				
+				;LINE-1 Reciever device 5
+				;---------------------------
+				
+				;LINE-1 transmitter device 6
+				;---------------------------
+				
+				;LINE-2 Control device 7
+				;-----------------------
+				
+				;LINE-2 Reciever device 8
+				;------------------------
+				
+				;LINE-2 transmitter device 9
+				;---------------------------
+				
+				
+				;$2B81
+				;$2B82 CRT handler address
+				
+				
+				
+					org	$0000
+					
+				;Initialize hardware
+				
+0000				L0000:
+
+				;initialize 8253 counter
+				
+0000 : 3E 36 		">6"		mvi	a,$36		;Counter 0,LSB before MSB ,MODE 3 (Square wave mode)
+0002 : D3 0B 		"  "		out	$0B		;Counter 0 used as LINE-1 baudrate generator
+0004 : 3E 76 		">v"		mvi	a,$76		;Counter 1 LSB before MSB ,MODE 3 (Square wave mode)
+0006 : D3 0B 		"  "		out	$0B		;Counter 1 used as LINE-2 baudrate generator
+0008 : 3E B6 		"> "		mvi	a,$B6		;Counter 2 LSB before MSB ,MODE 3 (Square wave mode)
+000A : D3 0B 		"  "		out	$0B		;Counter 2 used for ...
+
+				Set Counter 2 to 3C00
+				
+000C : 01 00 3C 	"  <"		lxi	b,$3C00		;value for 8253 counter 2
+000F : 79 		"y"		mov	a,c	
+0010 : D3 0A 		"  "		out	$0A		;set Counter 2 LSB
+0012 : 78 		"x"		mov	a,b
+0013 : D3 0A 		"  "		out	$0A		;set Counter 2 MSB
+
+				;initialize counter chip 2
+
+0015 : 3E 34 		">4"		mvi	a,$34		;3 Bytes to PORT 0F
+0017 : D3 0F 		"  "		out	$0F		;Counter 0
+0019 : 3E 76 		">v"		mvi	a,$76		
+001B : D3 0F 		"  "		out	$0F		;Counter 1
+001D : 3E BA 		"> "		mvi	a,$BA
+001F : D3 0F 		"  "		out	$0F		;Counter 2
+
+				;set Counter 1 to $0600
+				
+0021 : 01 00 06 	"   "		lxi	b,$0600		;3 byte to PORT 0D
+0024 : 79 		"y"		mov	a,c
+0025 : D3 0D 		"  "		out	$0D
+0027 : 78 		"x"		mov	a,b
+0028 : C3 43 00 	" C "		jmp	L0043		;continue ahead
+				
+002B : FF 		" "		DB	$FF		;RST 5.5 Alignment
+
+				;--------------------------------
+				;RST 5.5 Interrupt
+				;--------------------------------
+002C : F5 		" "		push	psw		;save registers
+002D : C5 		" "		push	b
+002E : D5 		" "		push	d
+002F : E5 		" "		push	h
+0030 : C3 F0 01 	"   "		jmp	L01F0		;continue ahead
+				;
+0033 : FF 		" "		DB	$FF		;RST 6.5 Alignment
+                               
+                                ;--------------------------------
+				;RST 6.5 Interrupt
+				;--------------------------------
+                                
+0034 : FB 		" "		ei
+0035 : C9 		" "		ret
+0036 : FF 		" "		DB	$FF,FF		;RST 7 Alignment
+
+				;--------------------------------
+				;RST 7 interrupt
+				;--------------------------------
+				
+0038 : F3 		" "		di			;Reset
+0039 : C3 00 00 	"   "		jmp	L0000
+
+				;--------------------------------
+				;RST 7.5 interrupt keyboard ?
+				;--------------------------------
+				
+003C : C3 EC 06 	"   "		jmp	L06EC		;continue at part 2
+				;
+003F : FF 		" "		DB	$FF		;Alignment
+
+				;--------------------------------
+				
+0040 : C3 7D 01 	" } "		jmp	L017D		;I/O main loop
+
+				;-------------------------------
+				;RESET-2 initialize more hardware
+				
+0043				L0043:
+0043 : D3 0D 		"  "		out	$0D		;
+
+				;set counter 2 to $00A0
+				
+0045 : 01 A0 00 	"   "		lxi	b,$00A0		;
+0048 : 79 		"y"		mov	a,c
+0049 : D3 0E 		"  "		out	$0E		;
+004B : 78 		"x"		mov	a,b
+004C : D3 0E 		"  "		out	$0E
+
+004E : AF 		" "		xra	a		;Reset CPU Board ?
+004F : D3 68 		" h"		out	$68		;
+0051 : 31 67 00 	"1g "		lxi	sp,$0067	;'jump' to 0069
+
+				;Set CRT DMA channel
+				
+0054				L0054:
+0054 : 01 00 20 	"   "		lxi	b,$2000		;VRAM address
+0057 : 11 B8 8B 	"   "		lxi	d,$8BB8		;read from RAM(8000) + display size(BB8)
+005A : 79 		"y"		mov	a,c
+005B : D3 64 		" d"		out	$64		;set DMA CRT channel address LSB
+005D : 78 		"x"		mov	a,b
+005E : D3 64 		" d"		out	$64		;set DMA CRT channel address LSB
+0060 : 7B 		"{"		mov	a,e
+0061 : D3 65 		" e"		out	$65		;set DMA CRT channel length LSB
+0063 : 7A 		"z"		mov	a,d
+0064 : D3 65 		" e"		out	$65		;set DMA CRT channel length MSB + direction
+0066 : C9 		" "		ret
+				;
+0067 : 69 		"i"		DW	$0069	;RET addr
+
+				;-------------------------------
+				; reset-3
+				;-------------------------------
+				
+0069 : 3E 74 		">t"		mvi	a,$74	;
+006B : D3 68 		" h"		out	$68	;DMA control
+006D : 3E 0A 		"> "		mvi	a,$0A	;set interrupt mask
+006F : 30 		"0"		sim		;
+0070 : AF 		" "		xra	a	
+0071 : D3 05 		"  "		out	$05	;00 UPD3301 CRTC Reset ?
+0073 : 3E CE 		"> "		mvi	a,$CE	
+0075 : D3 04 		"  "		out	$04	;CE 
+0077 : 3E 57 		">W"		mvi	a,$57
+0079 : D3 04 		"  "		out	$04	;57
+007B : 3E 6B 		">k"		mvi	a,$6B
+007D : D3 04 		"  "		out	$04	;6B
+007F : 3E 5E 		">^"		mvi	a,$5E
+0081 : D3 04 		"  "		out	$04	;5E
+0083 : 3E 13 		"> "		mvi	a,$13
+0085 : D3 04 		"  "		out	$04	;13
+0087 : 3E 42 		">B"		mvi	a,$42
+0089 : D3 05 		"  "		out	$05	;42 UPD3301 CRTC start display ?
+008B : 3E 20 		"> "		mvi	a,$20
+008D : D3 05 		"  "		out	$05	;20 UPD3301 CRTC reset interrupt ?
+
+				;Prepare ROM test
+				
+008F : 31 95 00 	"1  "		lxi	sp,$0095	;
+0092 : C3 B8 06 	"   "		jmp	L06B8		;Check ROM checksum
+0095 : 97 		" "		DW	$0097		;next ret addr
+
+				;-------------------------------
+				;Test ROM check result
+				;-------------------------------
+
+0097 : CA BD 00 	"   "		jz	L00BD		;jmp rom OK
+
+				;ROM checksum error
+				
+009A : 31 00 30 	"1 0"		lxi	sp,$3000	;
+009D : CD EF 0D 	"   "		call	L0DEF		
+00A0 : 21 B3 00 	"!  "		lxi	h,$00B3		;Rom Error message
+00A3 : 11 00 20 	"   "		lxi	d,$2000		;Video RAM 
+
+				;Print error message
+				
+00A6				L00A6:
+00A6 : 7E 		"~"		mov	a,m
+00A7 : 12 		" "		stax	d
+00A8 : 23 		"#"		inx	h
+00A9 : 13 		" "		inx	d
+00AA : FE A0 		"  "		cpi	$A0		;last character 
+00AC : C2 A6 00 	"   "		jnz	L00A6
+00AF : FB 		" "		ei
+
+				;Freeze
+				
+00B0				L00B0:
+00B0 : C3 B0 00 	"   "		jmp	L00B0		;freeze
+
+				;ROM checksum error message
+				
+00B3 : 52 		"R"		DB	"ROM ERROR"
+00BC : A0 		" "		DB	$A0
+
+				;-------------------------------
+				;Prepare RAM test
+				;-------------------------------
+				
+00BD				L00BD:
+00BD : 31 C3 00 	"1  "		lxi	sp,$00C3
+00C0 : C3 C9 06 	"   "		jmp	L06C9		;Test RAM
+				;
+00C3 : C5 		" "		dw	$00C5
+
+				;-------------------------------
+				;Test Ram test result
+				;-------------------------------
+				
+00C5 : CA 0F 01 	"   "		jz	L010F		;jmp RAM OK
+
+				;RAM error
+				
+				;Print 'AAAA BB RAM ERROR' Where A=address B=test pattern
+				
+00C8 : 31 00 30 	"1 0"		lxi	sp,$3000	;
+00CB : F5 		" "		push	psw
+00CC : E5 		" "		push	h
+00CD : CD EF 0D 	"   "		call	L0DEF	;
+00D0 : E1 		" "		pop	h
+00D1 : F1 		" "		pop	psw
+00D2 : 11 00 20 	"   "		lxi	d,$2000	;Video RAM
+00D5 : 47 		"G"		mov	b,a	;error byte
+00D6 : 4C 		"L"		mov	c,h	;MSB
+00D7 : CD E9 00 	"   "		call	L00E9	;print hex byte
+00DA : 1B 		" "		dcx	d	;back spave
+00DB : 4D 		"M"		mov	c,l	;LSB
+00DC : CD E9 00 	"   "		call	L00E9	;print hex byte
+00DF : 48 		"H"		mov	c,b	
+00E0 : CD E9 00 	"   "		call	L00E9	;print hex byte
+00E3 : 21 05 01 	"!  "		lxi	h,$0105	;RAM ERROR
+00E6 : C3 A6 00 	"   "		jmp	L00A6	;Print error message
+
+				;Print Hex byte
+				
+00E9				L00E9:
+00E9 : 79 		"y"		mov	a,c	;
+00EA : 0F 		" "		rrc
+00EB : 0F 		" "		rrc
+00EC : 0F 		" "		rrc
+00ED : 0F 		" "		rrc
+00EE : CD F3 00 	"   "		call	L00F3
+00F1 : 79 		"y"		mov	a,c
+00F2 : 1B 		" "		dcx	d	;
+00F3				L00F3:
+00F3 : E6 0F 		"  "		ani	$0F	
+00F5 : C6 30 		" 0"		adi	$30
+00F7 : FE 3A 		" :"		cpi	$3A
+00F9 : DA FE 00 	"   "		jc	L00FE
+00FC : C6 07 		"  "		adi	$07
+00FE				L00FE:
+00FE : 12 		" "		stax	d
+00FF : 13 		" "		inx	d
+0100 : 3E 20 		"> "		mvi	a,$20
+0102 : 12 		" "		stax	d
+0103 : 13 		" "		inx	d
+0104 : C9 		" "		ret
+				;
+0105 : 52 		"R"		db	"RAM ERROR"
+010E : A0 		" "		db	$A0
+
+				;-------------------------------
+				;tests complete prepare ..
+				;-------------------------------
+				
+010F				L010F:
+010F : 3E 92 		"> "		mvi	a,$92		;Mode 0 Port A,B input,C output
+0111 : D3 03 		"  "		out	$03		;initialize keyboard 8255 PPI control port
+0113 : 3E AA 		"> "		mvi	a,$AA		;1010 1010 MODE 1for Port A and Port-C upper.  Port A output, Port-C upper input
+								;          Mode 0 for Port B and Port C lower. PORT B input,  Port C-lower output
+0115 : D3 53 		" S"		out	$53		;printer 8255 PPI control
+0117 : AF 		" "		xra	a		;clear port C
+0118 : D3 52 		" R"		out	$52		;printer 8255 PPI port C
+011A : 3C 		"<"		inr	a		;set bit 0 port C
+011B : D3 53 		" S"		out	$53		
+011D : 3E 05 		"> "		mvi	a,$05		;set bit 2 port C.printer strobe off.
+011F : D3 53 		" S"		out	$53		;printer 8255 PPI control
+
+0121 : 21 00 20 	"!  "		lxi	h,$2000		;start of RAM
+0124 : 3E 30 		">0"		mvi	a,$30		;end of RAM
+0126				L0126:
+0126 : 36 00 		"6 "		mvi	m,$00		;clear RAM
+0128 : 23 		"#"		inx	h
+0129 : BC 		" "		cmp	h
+012A : C2 26 01 	" & "		jnz	L0126
+012D : 31 00 30 	"1 0"		lxi	sp,$3000	;set stack at end of RAM
+0130 : 3E 81 		"> "		mvi	a,$81		;Cursor ON ?
+0132 : 32 84 2B 	"2 +"		sta	$2B84		;UPD3301 CRT cursor command ?
+0135 : 3E 10 		"> "		mvi	a,$10	
+0137 : 32 7A 2B 	"2z+"		sta	$2B7A		;
+013A : CD 74 07 	" t "		call	L0774
+013D : 3E 0D 		"> "		mvi	a,$0D		;set bit 6 port C
+013F : D3 53 		" S"		out	$53		;printer 8255 PPI control
+0141 : 0E 03 		"  "		mvi	c,$03
+0143 : CD 78 06 	" x "		call	L0678		;Write FDC data		;
+0146 : 0E DF 		"  "		mvi	c,$DF
+0148 : CD 78 06 	" x "		call	L0678		;Write FDC data		;
+014B : 0E 32 		" 2"		mvi	c,$32
+014D : CD 78 06 	" x "		call	L0678		;Write FDC data		;
+0150 : 3E FF 		"> "		mvi	a,$FF
+0152 : 32 4A 2B 	"2J+"		sta	$2B4A		;last used track
+0155 : 3E 7A 		">z"		mvi	a,$7A		;1 stop bit,use even parity,7 bits,Asynchtonous
+0157 : 32 41 2B 	"2A+"		sta	$2B41		;LINE-1 Mode
+015A : 32 42 2B 	"2B+"		sta	$2B42		;LINE-2 Mode
+015D : 21 0A 00 	"!  "		lxi	h,$000A		;baudrate divisor for 9600 bps
+0160 : CD CB 02 	"   "		call	L02CB		;Set LINE-1 baudrate divisor
+0163 : CD 31 03 	" 1 "		call	L0331		;Set LINE-1 baudrate divisor
+0166 : 3E FE 		"> "		mvi	a,$FE		;CPU RAM upper 32K RAM bank
+0168 : 32 00 00 	"2  "		sta	L0000		;at 8000-FFFF
+016B : CD EF 0D 	"   "		call	L0DEF
+016E : FB 		" "		ei			;allow hardware interrupts
+016F : 2A 00 10 	"*  "		lhld	L1000		;test alternate ROM present ?
+0172 : 3E 55 		">U"		mvi	a,$55
+0174 : BD 		" "		cmp	l
+0175 : C2 7D 01 	" } "		jnz	L017D		;execute I/O main loop in this rom
+0178 : 2F 		"/"		cma
+0179 : BC 		" "		cmp	h		
+017A : CA 02 10 	"   "		jz	L1002		;execute alternate main loop ?
+
+				;--------------------------------
+				; I/O main loop
+				;--------------------------------
+				
+017D				L017D:
+
+				;Device 0 Diagnostics
+				
+017D : 3A 02 FF 	":  "		lda	$FF02		;diagnostics device status 
+0180 : FE FF 		"  "		cpi	$FF		;Test diagnostics wanted ?
+0182 : CC 36 02 	" 6 "		cz	L0236		;Call diagnostics handler
+
+				;Device 1 Keyboard
+				
+0185 : 3A 05 FF 	":  "		lda	$FF05		;keyboard Device status
+0188 : A7 		" "		ana	a		;has key been read ?
+0189 : CC 6A 02 	" j "		cz	L026A		;update keyboard
+
+				;Device 2 CRT display
+				
+018C : 21 08 FF 	"!  "		lxi	h,$FF08		;Device 2 status (CRT)
+018F : 7E 		"~"		mov	a,m
+0190 : A7 		" "		ana	a		;No data ?
+0191 : CA 9D 01 	"   "		jz	L019D		;jmp next device if so
+
+				; handle CRT data
+				
+0194 : 3A 06 FF 	":  "		lda	$FF06		;Get Character
+0197 : 4F 		"O"		mov	c,a
+0198 : AF 		" "		xra	a		
+0199 : 77 		"w"		mov	m,a		;signal CRT DATA read
+019A : CD 51 09 	" Q "		call	L0951		;Do CRT
+
+				;Device 3 Printer 
+				
+019D				L019D:
+019D : 3A 0B FF 	":  "		lda	$FF0B		;Device 3 status
+01A0 : A7 		" "		ana	a		;got data ?
+01A1 : C4 89 02 	"   "		cnz	L0289		;Do device 3
+
+				;Device 4 LINE-1 control
+				
+01A4 : 3A 0E FF 	":  "		lda	$FF0E		;Device 4 Status
+01A7 : A7 		" "		ana	a
+01A8 : C4 AA 02 	"   "		cnz	L02AA		;handle output 
+
+				;Device 5 LINE-1 Input
+				
+01AB : DB 21 		" !"		in	$21		;read Line-1 8251 status
+01AD : E6 02 		"  "		ani	$02		;test RxRDY
+01AF : C4 E6 02 	"   "		cnz	L02E6		;Device 5 input handler
+				
+				;Device 6 LINE-1 Output
+				
+01B2 : 3A 14 FF 	":  "		lda	$FF14		;Device 6 Status
+01B5 : A7 		" "		ana	a
+01B6 : C4 01 03 	"   "		cnz	L0301		;handle output
+
+				;Device 7 (I)
+				
+01B9 : 3A 17 FF 	":  "		lda	$FF17		;Device 7 status
+01BC : A7 		" "		ana	a
+01BD : C4 10 03 	"   "		cnz	L0310		;handle output
+
+				;Device 8 (O)
+				
+01C0 : DB 31 		" 1"		in	$31		;
+01C2 : E6 02 		"  "		ani	$02
+01C4 : C4 4C 03 	" L "		cnz	L034C		;handle deevice 7 input
+
+				;Device 9 (output only)
+				
+01C7 : 3A 1D FF 	":  "		lda	$FF1D		;Device 9 status
+01CA : A7 		" "		ana	a
+01CB : C4 67 03 	" g "		cnz	L0367
+
+				;Device A ()
+				
+01CE : 3A 20 FF 	":  "		lda	$FF20		;Device A status
+01D1 : A7 		" "		ana	a
+01D2 : C4 2B 09 	" + "		cnz	L092B		
+
+				;Deleted device handler ?
+				
+01D5 : 00 		" "		nop			
+01D6 : 00 		" "		nop
+01D7 : 00 		" "		nop
+01D8 : 00 		" "		nop
+01D9 : 00 		" "		nop
+01DA : 00 		" "		nop
+01DB : 00 		" "		nop
+01DC : 00 		" "		nop
+01DD : 00 		" "		nop
+01DE : 00 		" "		nop
+
+				;Device B floppydisk
+				
+01DF : 3A 23 FF 	":# "		lda	$FF23		;Device B status (Floppy drive A)
+01E2 : A7 		" "		ana	a
+01E3 : C4 00 10 	"   "		cnz	L1000		;BDOS
+
+				;device C 8253 Timer 0
+				
+01E6 : 3A 26 FF 	":& "		lda	$FF26		;Device C status
+01E9 : A7 		" "		ana	a
+01EA : C4 AA 06 	"   "		cnz	L06AA		;Write 8253 Timer 0
+01ED : C3 7D 01 	" } "		jmp	L017D		;I/O main loop
+
+				;-------------------------------
+				;RST 5.5 CRT interrupt continued
+				;-------------------------------
+				
+				;50Hz
+				
+01F0				L01F0:
+01F0 : DB 05 		"  "		in	$05	;UPD3301 CRTC status ?
+01F2 : E6 08 		"  "		ani	$08
+01F4 : CA FE 01 	"   "		jz	L01FE	;jmp 
+
+01F7 : 3E 20 		"> "		mvi	a,$20	;UPD3301 CRTC reset interrupt ?
+01F9 : D3 05 		"  "		out	$05	;
+01FB : C3 1A 02 	"   "		jmp	L021A	;interrupt return
+
+				;Do new CRT image
+				
+01FE				L01FE:
+01FE : 3A 84 2B 	": +"		lda	$2B84	;UPD3301 CRT cursor command ?
+0201 : D3 05 		"  "		out	$05
+0203 : 3A 8C 2B 	": +"		lda	$2B8C	;Column
+0206 : D3 04 		"  "		out	$04
+0208 : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+020B : D3 04 		"  "		out	$04
+020D : CD 54 00 	" T "		call	L0054	;Set CRT DMA channel
+0210 : 3E A0 		"> "		mvi	a,$A0	;UPD3301 CRTC Load cursor position ?
+0212 : D3 05 		"  "		out	$05
+0214 : CD 0C 09 	"   "		call	L090C	;Update Clock
+0217 : CD 20 02 	"   "		call	L0220	;Set Buzzer
+
+				;-------------------------------
+				;interrupt return 
+				;-------------------------------
+				
+021A				L021A:
+021A : E1 		" "		pop	h
+021B : D1 		" "		pop	d
+021C : C1 		" "		pop	b
+021D : F1 		" "		pop	psw
+021E : FB 		" "		ei
+021F : C9 		" "		ret
+
+				;-------------------------------
+				;Set Buzzer 
+				;-------------------------------
+				
+0220				L0220:
+0220 : 21 40 2B 	"!@+"		lxi	h,$2B40		;BUZZER
+0223 : 7E 		"~"		mov	a,m		;buzzer duration
+0224 : A7 		" "		ana	a
+0225 : CA 32 02 	" 2 "		jz	L0232		;jmp turn sound off?
+
+0228 : FE FF 		"  "		cpi	$FF		
+022A : CA 2E 02 	" . "		jz	L022E		;jp infinite duration
+022D : 35 		"5"		dcr	m		;else counter -1
+022E				L022E:
+022E : AF 		" "		xra	a		;clear bit 0 Port C. Turn buzzer on
+022F : D3 53 		" S"		out	$53		;printer 8255 PPI control
+0231 : C9 		" "		ret
+				;
+0232				L0232:
+0232 : 3C 		"<"		inr	a		;set bit 0 port C. Turn buzzer off
+0233 : D3 53 		" S"		out	$53		;printer 8255 PPI control
+0235 : C9 		" "		ret
+
+				;-------------------------------
+				;New Device Data
+				;-------------------------------
+				
+0236				L0236:
+0236 : 2A 00 FF 	"*  "		lhld	$FF00		;get pointer
+0239 : 7C 		"|"		mov	a,h		;Test diagnostic mode 
+023A : B5 		" "		ora	l		
+023B : C2 5F 02 	" _ "		jnz	L025F		;fast diagnostics
+
+				;Command 0000: Test ROM/RAM 
+				
+023E : CD B8 06 	"   "		call	L06B8		;Check ROM checksum
+0241 : A7 		" "		ana	a
+0242 : 3E 01 		"> "		mvi	a,$01		;ROM error
+0244 : C2 52 02 	" R "		jnz	L0252		;jmp ROM error
+0247 : F3 		" "		di
+0248 : CD C9 06 	"   "		call	L06C9		;Test RAM
+024B : FB 		" "		ei
+024C : A7 		" "		ana	a
+024D : CA 52 02 	" R "		jz	L0252		;RAM OK
+
+0250 : 3E 02 		"> "		mvi	a,$02		;RAM error
+
+				;-------------------------------
+				;diagnostics return
+				;-------------------------------
+				
+0252				L0252:
+0252 : 32 00 FF 	"2  "		sta	$FF00		;store diagnostics result
+0255 : AF 		" "		xra	a		
+0256 : 32 02 FF 	"2  "		sta	$FF02		;signal test completed
+
+				;enable CPU board?
+				
+0259				L0259:
+0259 : 3E FE 		"> "		mvi	a,$FE		;upper 32K RAM bank
+025B : 32 00 00 	"2  "		sta	L0000		;Select it
+025E : C9 		" "		ret
+
+				;--------------------------------
+				;CALL I/O board routine
+				
+				;
+025F				L025F:
+025F : 2A 00 FF 	"*  "		lhld	$FF00		;get CPU ram addr
+0262 : CD ED 05 	"   "		call	L05ED		;Select CPU RAM
+0265 : 11 52 02 	" R "		lxi	d,L0252		;exit Diagnostic addr
+0268 : D5 		" "		push	d		;stack service addr
+0269 : E9 		" "		pchl			;execute WORD
+
+				;-------------------------------
+				;update keyboard device
+				;-------------------------------
+				
+026A				L026A:
+026A : 21 79 2B 	"!y+"		lxi	h,$2B79		;key pos
+026D : 7E 		"~"		mov	a,m		;key buffer pos
+026E : 2B 		"+"		dcx	h
+026F : BE 		" "		cmp	m		;last pos
+0270 : C8 		" "		rz			;Same no key
+
+0271 : 5F 		"_"		mov	e,a		;buffer pos
+0272 : 16 00 		"  "		mvi	d,$00
+0274 : 21 70 2B 	"!p+"		lxi	h,$2B70		;keyboard buffer
+0277 : 19 		" "		dad	d		;poit to key
+0278 : 7E 		"~"		mov	a,m		;get key
+0279 : 32 03 FF 	"2  "		sta	$FF03		;aet device input
+027C : 7B 		"{"		mov	a,e
+027D : 3C 		"<"		inr	a		;update buffer pos
+027E : E6 07 		"  "		ani	$07		
+0280 : 32 79 2B 	"2y+"		sta	$2B79		;key buffer pos
+0283 : 3E FF 		"> "		mvi	a,$FF		;signal new data
+0285 : 32 05 FF 	"2  "		sta	$FF05		;
+0288 : C9 		" "		ret
+
+				;--------------------------
+				;Device 3 (printer ?)
+				;--------------------------
+				
+				;entry Byte 0 Printer data ?
+				;exit  Byte 1 Printer status ?
+				
+				;io ports 50,51,52,53 of printer 8255 PPI
+				;         
+				
+0289				L0289:
+0289 : DB 51 		" Q"		in	$51	;read 8255 port B. printer status lines ?
+028B : EE C0 		"  "		xri	$C0	;invert bits 6 and 7
+028D : E6 F0 		"  "		ani	$F0	;clear unwanted bits
+028F : 47 		"G"		mov	b,a	;save for later
+0290 : 21 09 FF 	"!  "		lxi	h,$FF09 ;device data
+0293 : 4E 		"N"		mov	c,m	;get char
+0294 : 23 		"#"		inx	h	;
+0295 : 70 		"p"		mov	m,b	;set device input data
+0296 : C0 		" "		rnz		;not ready ?
+
+0297 : DB 52 		" R"		in	$52	;test busy ?
+0299 : E6 08 		"  "		ani	$08	;
+029B : C8 		" "		rz		;still busy ?
+
+029C : 79 		"y"		mov	a,c	;char
+029D : 23 		"#"		inx	h	
+029E : 70 		"p"		mov	m,b	;signal ready
+029F : D3 50 		" P"		out	$50	;8255 port A. printer data
+02A1 : 3E 04 		"> "		mvi	a,$04	;clear bit 2 port C. Strobe on
+02A3 : D3 53 		" S"		out	$53	;printer 8255 PPI control
+02A5 : 3E 05 		"> "		mvi	a,$05	;set bit 2 port C. strobe off
+02A7 : D3 53 		" S"		out	$53	;printer 8255 PPI control
+02A9 : C9 		" "		ret
+
+				;------------------------
+				;Device 4 Line-1 control
+				;------------------------
+				
+				;Configure LINE -1 serial port
+				
+				;FF0C = Mode
+				;FF0D = Baudrate
+				
+02AA				L02AA:
+02AA : 2A 0C FF 	"*  "		lhld	$FF0C	;get data
+02AD : AF 		" "		xra	a
+02AE : 32 0E FF 	"2  "		sta	$FF0E	;clear 
+02B1 : 7D 		"}"		mov	a,l	;get Async mode command
+02B2 : E6 FC 		"  "		ani	$FC	;ignore baudrate factor
+02B4 : F6 02 		"  "		ori	$02	;set 16x baudrate factor
+02B6 : 32 41 2B 	"2A+"		sta	$2B41	;LINE-1 Mode command var
+02B9 : 7C 		"|"		mov	a,h	;get baudrate nr
+02BA : 21 05 00 	"!  "		lxi	h,$0005	;Lowest Devisor for 19200
+02BD : FE 07 		"  "		cpi	$07	;test invalid baudrate
+02BF : D2 D1 02 	"   "		jnc	L02D1	;Reset controller if so
+
+02C2 : A7 		" "		ana	a	;test shift value
+02C3 : CA CB 02 	"   "		jz	L02CB	;jmp no shift
+02C6				L02C6:
+02C6 : 29 		")"		dad	h	;HL= 5 << A
+02C7 : 3D 		"="		dcr	a	
+02C8 : C2 C6 02 	"   "		jnz	L02C6
+
+				;Set baudrate divisor
+				
+02CB				L02CB:
+02CB : 7D 		"}"		mov	a,l	;load counter 0 with baudrate
+02CC : D3 08 		"  "		out	$08	;LSB devisor
+02CE : 7C 		"|"		mov	a,h	;
+02CF : D3 08 		"  "		out	$08	;MSB devisor
+
+				;-------------------------
+				;reset LINE-1 8251 UART
+				;-------------------------
+				
+02D1				L02D1:
+02D1 : AF 		" "		xra	a	;
+02D2 : D3 21 		" !"		out	$21	;00 \
+02D4 : D3 21 		" !"		out	$21	;00  Synch bytes 
+02D6 : D3 21 		" !"		out	$21	;00 /
+02D8 : 3E 40 		">@"		mvi	a,$40	;Internal Reset UART command
+02DA : D3 21 		" !"		out	$21	;write LINE-1 8251 command
+02DC : 3A 41 2B 	":A+"		lda	$2B41	;Get Mode Command
+02DF : D3 21 		" !"		out	$21	;write LINE-1 8251 command
+02E1 : 3E 37 		">7"		mvi	a,$37	;assert RTS,Reset ErrorFlag,RxEnable,assert DTR,TxEnable
+02E3 : D3 21 		" !"		out	$21	;write LINE-1 8251 command
+02E5 : C9 		" "		ret
+
+				;-----------------------------
+				;device 5 LINE-1 input 
+				;-----------------------------
+				
+				;Resets LINE-1 UART if there was a BREAK detected.
+				
+				;Note that errors are not passed through the device
+				;handler.
+				
+02E6				L02E6:
+02E6 : 3A 11 FF 	":  "		lda	$FF11
+02E9 : A7 		" "		ana	a
+02EA : C0 		" "		rnz		;data has not been read yet
+
+				;handle new input data
+				
+02EB : DB 20 		"  "		in	$20	;read new data from device
+02ED : 32 0F FF 	"2  "		sta	$FF0F	;Store as Device data
+02F0 : 3E FF 		"> "		mvi	a,$FF	;signal recieved data
+02F2 : 32 11 FF 	"2  "		sta	$FF11	;
+02F5 : DB 21 		" !"		in	$21	;8251 Status
+02F7 : E6 40 		" @"		ani	$40	;test BREAK detect
+02F9 : C2 D1 02 	"   "		jnz	L02D1	;reset LINE-1 8251 UART
+
+02FC : 3E 37 		">7"		mvi	a,$37	;set RTS,Reset ErrorFlag,RxEnable,set DTR,TxEnable
+02FE : D3 21 		" !"		out	$21	;write LINE-1 8251 command
+0300 : C9 		" "		ret
+				
+				;------------------------
+				;Device 6 LINE-1 Output
+				;------------------------
+				
+0301				L0301:
+0301 : DB 21 		" !"		in	$21	;LINE-1 status 
+0303 : E6 01 		"  "		ani	$01	;test TxRDY
+0305 : C8 		" "		rz		;ret not ready yet
+
+0306 : 3A 12 FF 	":  "		lda	$FF12	;get character
+0309 : D3 20 		"  "		out	$20	;output 8251 Data
+030B : AF 		" "		xra	a
+030C : 32 14 FF 	"2  "		sta	$FF14	;signal ready
+030F : C9 		" "		ret
+
+				;-------------------------
+				;Device 7 LINE-2 Control
+				;-------------------------
+				
+0310				L0310:
+0310 : 2A 15 FF 	"*  "		lhld	$FF15
+0313 : AF 		" "		xra	a
+0314 : 32 17 FF 	"2  "		sta	$FF17	;data has been read
+0317 : 7D 		"}"		mov	a,l
+0318 : E6 FC 		"  "		ani	$FC
+031A : F6 02 		"  "		ori	$02
+031C : 32 42 2B 	"2B+"		sta	$2B42	;DATA ?
+031F : 7C 		"|"		mov	a,h	;multiplier Range 0-6,7+ & don't change ..
+0320 : 21 05 00 	"!  "		lxi	h,$0005	;
+0323 : FE 07 		"  "		cpi	$07
+0325 : D2 37 03 	" 7 "		jnc	L0337	;
+0328 : A7 		" "		ana	a
+0329 : CA 31 03 	" 1 "		jz	L0331
+032C				L032C:
+032C : 29 		")"		dad	h
+032D : 3D 		"="		dcr	a
+032E : C2 2C 03 	" , "		jnz	L032C
+
+				;Set LINE-1 baudrate divisor
+				
+0331				L0331:
+0331 : 7D 		"}"		mov	a,l	;8253 counter 1
+0332 : D3 09 		"  "		out	$09
+0334 : 7C 		"|"		mov	a,h	;
+0335 : D3 09 		"  "		out	$09
+
+				;Device 7 reset LINE-2 8251 control
+				
+0337				L0337:
+0337 : AF 		" "		xra	a
+0338 : D3 31 		" 1"		out	$31	;00
+033A : D3 31 		" 1"		out	$31	;00
+033C : D3 31 		" 1"		out	$31	;00
+033E : 3E 40 		">@"		mvi	a,$40
+0340 : D3 31 		" 1"		out	$31	;40
+0342 : 3A 42 2B 	":B+"		lda	$2B42	;DAtA?
+0345 : D3 31 		" 1"		out	$31
+0347 : 3E 37 		">7"		mvi	a,$37	;37
+0349 : D3 31 		" 1"		out	$31
+034B : C9 		" "		ret
+
+				;------------------------------
+				;Device 8 LINE-2 input ?
+				;------------------------------
+				
+034C				L034C:
+034C : 3A 1A FF 	":  "		lda	$FF1A
+034F : A7 		" "		ana	a
+0350 : C0 		" "		rnz
+0351 : DB 30 		" 0"		in	$30
+0353 : 32 18 FF 	"2  "		sta	$FF18
+0356 : 3E FF 		"> "		mvi	a,$FF
+0358 : 32 1A FF 	"2  "		sta	$FF1A
+035B : DB 31 		" 1"		in	$31
+035D : E6 40 		" @"		ani	$40
+035F : C2 37 03 	" 7 "		jnz	L0337	;reset on error?
+
+0362 : 3E 37 		">7"		mvi	a,$37
+0364 : D3 31 		" 1"		out	$31
+0366 : C9 		" "		ret
+
+				;----------------------------
+				;Device 9 LINE-2 output 
+				;----------------------------
+				
+0367				L0367:
+0367 : DB 31 		" 1"		in	$31
+0369 : E6 01 		"  "		ani	$01
+036B : C8 		" "		rz
+
+036C : 3A 1B FF 	":  "		lda	$FF1B
+036F : D3 30 		" 0"		out	$30
+0371 : AF 		" "		xra	a
+0372 : 32 1D FF 	"2  "		sta	$FF1D
+0375 : C9 		" "		ret
+
+				;----------------------------
+				;Device B disk 
+				;----------------------------
+				
+0376 : 2A 21 FF 	"*! "		lhld	$FF21
+0379 : 11 43 2B 	" C+"		lxi	d,$2B43		;disk data buffer
+037C : 0E 07 		"  "		mvi	c,$07		;7 bytes 
+037E : CD CC 05 	"   "		call	L05CC		;Read CPU RAM (C bytes from CPU ram at HL to DE)
+0381 : AF 		" "		xra	a
+0382 : 32 4C 2B 	"2L+"		sta	$2B4C		;clear ..
+0385 : 11 B3 03 	"   "		lxi	d,$03B3		;disk ready
+0388 : D5 		" "		push	d		;set as return addr
+0389 : CD 91 06 	"   "		call	L0691		;Test FDD Ready
+038C : 3E 80 		"> "		mvi	a,$80		;Signal busy
+038E : CA 3A 06 	" : "		jz	L063A		;disk error
+
+0391 : 3A 44 2B 	":D+"		lda	$2B44		;disk command
+0394 : E6 07 		"  "		ani	$07		;0..7
+0396 : 6F 		"o"		mov	l,a
+0397 : 26 00 		"& "		mvi	h,$00
+0399 : 29 		")"		dad	h
+039A : 11 A3 03 	"   "		lxi	d,$03A3		;address table
+039D : 19 		" "		dad	d
+039E : 5E 		"^"		mov	e,m
+039F : 23 		"#"		inx	h
+03A0 : 56 		"V"		mov	d,m
+03A1 : EB 		" "		xchg
+03A2 : E9 		" "		pchl			;INFO: index jump
+
+				;--------------------------------
+				;device B address table
+				;--------------------------------
+				
+				;Note BDOS in this ROM uses format:
+				;Single density,single sided disk
+				;77 Tracks, 26 sectors of 128 bytes
+				
+				;2B43 sector Size 
+				;2B44 command + 16 * drive
+				;2B45 sector count
+				;2B46 Track
+				;2B47 Sector
+				;2B48 RAM address
+				
+				
+03A3 : 					03B3	;0 disk ready
+03A5 : 					03D4 	;1 Seek track 
+					0414	;2 format disk
+03A9 : 					048D	;3 recalibrate
+03AB : 					04AC	;4 Read sector command
+03AD : 					04E0	;5 Read BDOS boot sector command
+03AF : 					050B	;6 Write sector command
+03B1 : 					050B	;7 Write deleted sector command
+
+				;--------------------------------
+				;disk ready
+				;--------------------------------
+				
+03B3 : 3E 02 		"> "		mvi	a,$02	;clear bit 1 of port C.
+03B5 : D3 53 		" S"		out	$53	;printer 8255 PPI control
+03B7 : 3A 4C 2B 	":L+"		lda	$2B4C	;disk error status 
+03BA : 32 21 FF 	"2! "		sta	$FF21	;Store device result
+03BD : A7 		" "		ana	a	;test no error	
+03BE : 3A 46 2B 	":F+"		lda	$2B46	;track
+03C1 : CA C6 03 	"   "		jz	L03C6	;jmp no error
+
+03C4 : 3E FF 		"> "		mvi	a,$FF	;invalid track in case of error
+03C6				L03C6:
+03C6 : 32 4A 2B 	"2J+"		sta	$2B4A	;set last used track
+03C9 : 3A 44 2B 	":D+"		lda	$2B44	;drive
+03CC : 32 4B 2B 	"2K+"		sta	$2B4B	;set last used drive
+03CF : AF 		" "		xra	a	;signal ready
+03D0 : 32 23 FF 	"2# "		sta	$FF23	;device ready
+03D3 : C9 		" "		ret
+
+				;--------------------------------
+				;Seek Track
+				;--------------------------------
+				
+03D4				L03D4:
+03D4 : 3A 46 2B 	":F+"		lda	$2B46	;cylinder
+03D7 : FE FF 		"  "		cpi	$FF	;test invalid cylinder
+03D9 : CA 5B 06 	" [ "		jz	L065B	;seek error if so
+
+03DC : 4F 		"O"		mov	c,a	;wanted track
+03DD : 21 4A 2B 	"!J+"		lxi	h,$2B4A	;last used track
+03E0 : BE 		" "		cmp	m
+03E1 : C2 EC 03 	"   "		jnz	L03EC	;jump not same track
+
+				;same track test same drive
+				
+03E4 : 3A 44 2B 	":D+"		lda	$2B44	;drive
+03E7 : 23 		"#"		inx	h	;point to 2B4B drive
+03E8 : AE 		" "		xra	m	;get  drive changes
+03E9 : E6 30 		" 0"		ani	$30	;test drive change
+03EB : C8 		" "		rz		;ret same drive no seek needed
+
+				;different track do seek 
+				
+03EC				L03EC:
+03EC : 79 		"y"		mov	a,c	;New Cylinder
+03ED : A7 		" "		ana	a	;test cylinder 0
+03EE : CA 8D 04 	"   "		jz	L048D	;Recalibrate head if so
+
+03F1 : 2E 0F 		". "		mvi	l,$0F	;Seek FDC command
+03F3 : C5 		" "		push	b	;save NCN
+03F4 : CD 6A 06 	" j "		call	L066A	;Write FDC Command
+03F7 : C1 		" "		pop	b	;get New Cylinder Number
+03F8 : CD 78 06 	" x "		call	L0678	;Write FDC data
+
+				;-----------------------
+				;seek wait
+				;-----------------------
+				
+03FB				L03FB:
+03FB : CD 9A 06 	"   "		call	L069A	;wait/sleep?
+03FE : 0E 08 		"  "		mvi	c,$08	;sense interrupt FDD command
+0400 : CD 78 06 	" x "		call	L0678	;Write FDC data
+0403 : CD 85 06 	"   "		call	L0685	;read FDC data
+0406 : 32 4D 2B 	"2M+"		sta	$2B4D	;ST0 ram var
+0409 : F5 		" "		push	psw
+040A : CD 85 06 	"   "		call	L0685	;read FDD data to drop PCN
+040D : F1 		" "		pop	psw
+040E : E6 C0 		"  "		ani	$C0	;test Interrupt Code
+0410 : C8 		" "		rz		;Return No error
+
+0411 : C3 5B 06 	" [ "		jmp	L065B	;seek Error 
+
+				;-------------------------------
+				;disk command 2 Format Disk
+				;-------------------------------
+				
+0414 : CD DF 05 	"   "		call	L05DF		;Test Write Protect
+0417 : C2 65 06 	" e "		jnz	L0665		;write protect error
+
+041A : CD 8D 04 	"   "		call	L048D		;Recalibrate head
+041D : C0 		" "		rnz			;return error
+
+041E : 0D 		" "		dcr	c		;?
+041F : 32 4A 2B 	"2J+"		sta	$2B4A		;last used track = 0
+
+				;format track
+				
+0422				L0422:
+0422 : 3E 03 		"> "		mvi	a,$03		;set bit 1 port C.
+0424 : D3 53 		" S"		out	$53		;printer 8255 PPI control
+0426 : 3A 46 2B 	":F+"		lda	$2B46		;track
+0429 : 47 		"G"		mov	b,a		;
+042A : 0E 00 		"  "		mvi	c,$00		;
+042C : 16 01 		"  "		mvi	d,$01		;
+042E : 1E 00 		"  "		mvi	e,$00
+0430 : 21 4C 2B 	"!L+"		lxi	h,$2B4C		;sector buffer
+0433				L0433:
+0433 : 70 		"p"		mov	m,b		;track
+0434 : 23 		"#"		inx	h
+0435 : 71 		"q"		mov	m,c		;00
+0436 : 23 		"#"		inx	h
+0437 : 72 		"r"		mov	m,d		;sector number
+0438 : 23 		"#"		inx	h
+0439 : 73 		"s"		mov	m,e		;00
+043A : 23 		"#"		inx	h
+043B : 14 		" "		inr	d		;sector+1
+043C : 7A 		"z"		mov	a,d
+043D : FE 1B 		"  "		cpi	$1B		;last sector+1
+043F : C2 33 04 	" 3 "		jnz	L0433		;loop for 26 sectors
+
+0442 : 01 4C 2B 	" L+"		lxi	b,$2B4C 	;sector buffer
+0445 : 11 67 80 	" g "		lxi	d,$8067 	;write 0068 bytes
+
+0448 : CD A6 05 	"   "		call	L05A6		;Set FDD DMA
+044B : 2E 0D 		". "		mvi	l,$0D		;Write ID [Format Write]
+044D : CD 6A 06 	" j "		call	L066A		;Write FDC Command
+0450 : 21 E5 1B 	"!  "		lxi	h,$1BE5		;H=gap length,L=bytes to write
+0453 : CD 7E 05 	" ~ "		call	L057E		;write FDD regs
+0456 : 3A 4D 2B 	":M+"		lda	$2B4D		;ST0 var
+0459 : E6 C0 		"  "		ani	$C0		;Test Interrupt Code
+045B : CA 69 04 	" i "		jz	L0469		;jmp no error
+
+045E : 3A 4E 2B 	":N+"		lda	$2B4E		;
+0461 : E6 02 		"  "		ani	$02
+0463 : CA 65 06 	" e "		jz	L0665		;jmp write protect error
+0466 : C3 60 06 	" ` "		jmp	L0660		;write error
+
+				;-------------------------------
+				
+0469				L0469:
+0469 : 3E 02 		"> "		mvi	a,$02		;clear bit 1 port C. drive head step in ?
+046B : D3 53 		" S"		out	$53		;printer 8255 PPI control
+046D : 3E 01 		"> "		mvi	a,$01		;
+046F : 32 47 2B 	"2G+"		sta	$2B47		;sector number 
+0472 : 3E 1A 		"> "		mvi	a,$1A		;26 sectors 
+0474 : 32 45 2B 	"2E+"		sta	$2B45		;sector count
+0477 : CD E4 04 	"   "		call	L04E4		;disk command 5 check sector ?
+047A : A7 		" "		ana	a
+047B : C2 60 06 	" ` "		jnz	L0660		;jmp read sector error 
+
+				;next track
+				
+047E : 21 46 2B 	"!F+"		lxi	h,$2B46		;track
+0481 : 34 		"4"		inr	m		;increment track
+0482 : 7E 		"~"		mov	a,m
+0483 : FE 4D 		" M"		cpi	$4D		;last track 77
+0485 : C8 		" "		rz			;done
+
+0486 : CD D4 03 	"   "		call	L03D4		;Seek track 
+0489 : C0 		" "		rnz
+
+048A : C3 22 04 	" " "		jmp	L0422		;format track
+
+				;--------------------------------
+				;Recalibrate head (Track 0)
+				;--------------------------------
+				
+048D				L048D:
+048D : 2E 07 		". "		mvi	l,$07	;Recalibrate
+048F : CD 6A 06 	" j "		call	L066A	;Write FDC Command
+0492 : CD FB 03 	"   "		call	L03FB	;seek wait
+0495 : 3A 4D 2B 	":M+"		lda	$2B4D	;FDD ST3 var
+0498 : E6 10 		"  "		ani	$10	;Test at Track 0
+049A : C2 5B 06 	" [ "		jnz	L065B	;seek error if not
+
+049D : 06 23 		" #"		mvi	b,$23	;do delay
+049F				L049F:
+049F : AF 		" "		xra	a
+04A0				L04A0:
+04A0 : 3D 		"="		dcr	a
+04A1 : C2 A0 04 	"   "		jnz	L04A0
+04A4 : 05 		" "		dcr	b
+04A5 : C2 9F 04 	"   "		jnz	L049F
+04A8 : 32 46 2B 	"2F+"		sta	$2B46	;
+04AB : C9 		" "		ret
+
+				;--------------------------------
+				;Read Sector command
+				;--------------------------------
+				
+04AC : CD D4 03 	"   "		call	L03D4		;Seek track 	
+04AF : C0 		" "		rnz			;return error
+
+04B0				L04B0:
+04B0 : 01 4C 2B 	" L+"		lxi	b,$2B4C		;sector buffer
+04B3 : 11 7F 40 	"  @"		lxi	d,$407F		;sector size+3FFF
+04B6 : 2E 06 		". "		mvi	l,$06		;FDD read sector command
+04B8 : 26 07 		"& "		mvi	h,$07		;gap length
+04BA : CD 63 05 	" c "		call	L0563		;sector command
+04BD : 3A 4D 2B 	":M+"		lda	$2B4D		;ST0 var
+04C0 : E6 C0 		"  "		ani	$C0		;test Interrupt Code
+04C2 : C2 11 06 	"   "		jnz	L0611		;jmp error
+
+04C5 : 2A 48 2B 	"*H+"		lhld	$2B48		;CPU RAM addr
+04C8 : 11 4C 2B 	" L+"		lxi	d,$2B4C		;sector buffer
+04CB : 0E 80 		"  "		mvi	c,$80		;128 bytes
+04CD : CD B9 05 	"   "		call	L05B9		;Write CPU RAM (C bytes to CPU ram from DE to HL)
+04D0 : 2A 48 2B 	"*H+"		lhld	$2B48		;CPU RAM addr
+04D3 : 11 80 00 	"   "		lxi	d,$0080		;advance CPU ram addr
+04D6 : 19 		" "		dad	d		;by 128 bytes
+04D7 : 22 48 2B 	""H+"		shld	$2B48		;store new CPU addr
+04DA : CD 51 05 	" Q "		call	L0551		;Next Sector or Exit		;
+04DD : C3 B0 04 	"   "		jmp	L04B0		;loop
+
+				;-------------------------------
+				;disk command 5 check sector ?
+				;-------------------------------
+				
+04E0 : CD D4 03 	"   "		call	L03D4		;Seek track ?
+04E3 : C0 		" "		rnz
+04E4				L04E4:
+04E4 : 3A 45 2B 	":E+"		lda	$2B45		;sector count
+04E7 : 4F 		"O"		mov	c,a		
+04E8 : 21 80 00 	"!  "		lxi	h,$0080		;sector size in bytes
+04EB : CD 77 08 	" w "		call	L0877		;Multiply HL = C * HL
+04EE : 2B 		"+"		dcx	h		;-1
+04EF : 11 00 40 	"  @"		lxi	d,$4000		;4000+
+04F2 : 19 		" "		dad	d
+04F3 : EB 		" "		xchg			;DE=bytes to load + 3FFF?
+
+04F4 : 01 00 10 	"   "		lxi	b,L1000		;BDOS?
+04F7 : 11 7F 40 	"  @"		lxi	d,$407F		;bytes to load +3FFF ? (note overwrites previous calculated length)
+04FA : 2E 06 		". "		mvi	l,$06		;FDD Read command
+04FC : 26 07 		"& "		mvi	h,$07		;gap length
+04FE : CD 63 05 	" c "		call	L0563		;Sector command
+0501 : 3A 4D 2B 	":M+"		lda	$2B4D		;ST0 var
+0504 : E6 C0 		"  "		ani	$C0		;test Interrupt Code
+0506 : C2 11 06 	"   "		jnz	L0611		;Error
+
+0509 : AF 		" "		xra	a		;signal success
+050A : C9 		" "		ret
+
+				;-------------------------------
+				;write sector command
+				;-------------------------------
+				
+050B : CD DF 05 	"   "		call	L05DF		;Test Write Protect
+050E : C2 65 06 	" e "		jnz	L0665
+0511 : CD D4 03 	"   "		call	L03D4		;Seek track ?
+0514 : C0 		" "		rnz
+0515				L0515:
+0515 : 2A 48 2B 	"*H+"		lhld	$2B48		;CPU RAM addr
+0518 : 11 4C 2B 	" L+"		lxi	d,$2B4C		;sector buffer
+051B : 0E 80 		"  "		mvi	c,$80
+051D : CD CC 05 	"   "		call	L05CC		;Read CPU RAM (C bytes from CPU ram at HL to DE)
+0520 : 2A 48 2B 	"*H+"		lhld	$2B48
+0523 : 11 80 00 	"   "		lxi	d,$0080
+0526 : 19 		" "		dad	d		;
+0527 : 22 48 2B 	""H+"		shld	$2B48	
+052A : 01 4C 2B 	" L+"		lxi	b,$2B4C		;buffer
+052D : 11 7F 80 	"   "		lxi	d,$807F		;Write 0080 bytes
+0530 : 2E 05 		". "		mvi	l,$05		;Write data
+0532 : 3A 44 2B 	":D+"		lda	$2B44		;command
+0535 : E6 07 		"  "		ani	$07		;keep command bits
+0537 : FE 07 		"  "		cpi	$07
+0539 : C2 3E 05 	" > "		jnz	L053E		;
+053C : 2E 09 		". "		mvi	l,$09		;write deleted data FDD command
+053E				L053E:
+053E : 26 1B 		"& "		mvi	h,$1B		;gap length
+0540 : CD 63 05 	" c "		call	L0563		;
+0543 : 3A 4D 2B 	":M+"		lda	$2B4D		;ST0 var
+0546 : E6 C0 		"  "		ani	$C0		;Test Interrupt Code
+0548 : C2 11 06 	"   "		jnz	L0611		;jmp write sector error
+054B : CD 51 05 	" Q "		call	L0551		;Next Sector or Exit
+054E : C3 15 05 	"   "		jmp	L0515		;loop
+
+				;--------------------------------
+				;Next Sector or Exit
+				;--------------------------------
+				
+0551				L0551:
+0551 : D1 		" "		pop	d		;drop return addr
+0552 : 21 45 2B 	"!E+"		lxi	h,$2B45		;sector count
+0555 : 35 		"5"		dcr	m		;decrease
+0556 : C8 		" "		rz			;Exit not returning to caller
+
+0557 : 21 47 2B 	"!G+"		lxi	h,$2B47		;sector
+055A : 34 		"4"		inr	m		;next sector
+055B : 7E 		"~"		mov	a,m		
+055C : FE 1B 		"  "		cpi	$1B		;test invalid sector
+055E : D2 56 06 	" V "		jnc	L0656		;invalid sector error
+0561 : D5 		" "		push	d		;stack return addr
+0562 : C9 		" "		ret			;return
+
+				;-------------------------------
+				;Sector command
+				;-------------------------------
+				
+				;Entry:
+				;	L  = FDC command
+				;	H  = Gap length
+				;	BC = RAM address
+				;	DE = Length-1 +4000 to RAM, +8000 From RAM
+0563				L0563:
+0563 : CD A6 05 	"   "		call	L05A6		;Set FDD DMA
+0566 : CD 6A 06 	" j "		call	L066A		;Write FDC Command
+0569 : 2E 80 		". "		mvi	l,$80		;bytes to read
+056B : 3A 46 2B 	":F+"		lda	$2B46		;track ID
+056E : 4F 		"O"		mov	c,a		;
+056F : CD 78 06 	" x "		call	L0678		;Write FDC data
+0572 : 0E 00 		"  "		mvi	c,$00		;logical head ID
+0574 : CD 78 06 	" x "		call	L0678		;Write FDC data
+0577 : 3A 47 2B 	":G+"		lda	$2B47		;sector ID
+057A : 4F 		"O"		mov	c,a
+057B : CD 78 06 	" x "		call	L0678		;Write FDC data
+057E				L057E:
+057E : 0E 00 		"  "		mvi	c,$00		;sector size ID
+0580 : CD 78 06 	" x "		call	L0678		;Write FDC data
+0583 : 0E 1A 		"  "		mvi	c,$1A		;EOT last sector on track
+0585 : CD 78 06 	" x "		call	L0678		;Write FDC data
+0588 : 4C 		"L"		mov	c,h		;GPL gap length
+0589 : CD 78 06 	" x "		call	L0678		;Write FDC data
+058C : 4D 		"M"		mov	c,l		;DTL data length
+058D : CD 78 06 	" x "		call	L0678		;Write FDC data
+0590 : CD 9A 06 	"   "		call	L069A		;sleep/Wait
+0593 : 3E 74 		">t"		mvi	a,$74		;
+0595 : D3 68 		" h"		out	$68
+0597 : 21 4D 2B 	"!M+"		lxi	h,$2B4D		;FDD status buffer 
+059A : 06 07 		"  "		mvi	b,$07		;7 bytes
+059C				L059C:
+059C : CD 85 06 	"   "		call	L0685		;read FDC data
+059F : 77 		"w"		mov	m,a		;store into buffer
+05A0 : 23 		"#"		inx	h
+05A1 : 05 		" "		dcr	b
+05A2 : C2 9C 05 	"   "		jnz	L059C
+05A5 : C9 		" "		ret
+
+				;---------------------------------
+				;Set FDD DMA channel 0
+				;---------------------------------
+				
+05A6				L05A6:
+05A6 : 79 		"y"		mov	a,c
+05A7 : F3 		" "		di
+05A8 : D3 60 		" `"		out	$60	;BC = RAM address
+05AA : 78 		"x"		mov	a,b
+05AB : D3 60 		" `"		out	$60
+05AD : 7B 		"{"		mov	a,e	;DE = Length-1+4000 for FDD to RAM or 8000 for RAM to FDD
+05AE : D3 61 		" a"		out	$61
+05B0 : 7A 		"z"		mov	a,d
+05B1 : D3 61 		" a"		out	$61
+05B3 : 3E 75 		">u"		mvi	a,$75	;execute DMA/Halt CPU Board ?
+05B5 : D3 68 		" h"		out	$68
+05B7 : FB 		" "		ei
+05B8 : C9 		" "		ret
+
+				;--------------------------------
+				;Write CPU RAM (C bytes to CPU ram from DE to HL)
+				;--------------------------------
+				
+05B9				L05B9:
+05B9 : CD ED 05 	"   "		call	L05ED		;Select CPU RAM
+05BC				L05BC:
+05BC : 1A 		" "		ldax	d		;copy (DE) to cpu RAM (HL)
+05BD : 77 		"w"		mov	m,a
+05BE : 13 		" "		inx	d
+05BF : 23 		"#"		inx	h
+05C0 : 7C 		"|"		mov	a,h
+05C1 : A7 		" "		ana	a
+05C2 : CC 02 06 	"   "		cz	L0602		;adjust CPU RAM bank (toggle)
+05C5 : 0D 		" "		dcr	c
+05C6 : C2 BC 05 	"   "		jnz	L05BC
+05C9 : C3 59 02 	" Y "		jmp	L0259	;enable CPU board
+
+				;-----------------------
+				;Read CPU RAM (C bytes from CPU ram at HL to DE)
+				;-----------------------
+				
+05CC				L05CC:
+05CC : CD ED 05 	"   "		call	L05ED		;Select CPU RAM
+05CF				L05CF:
+05CF : 7E 		"~"		mov	a,m		;copy (HL) to (DE)
+05D0 : 12 		" "		stax	d
+05D1 : 13 		" "		inx	d
+05D2 : 23 		"#"		inx	h
+05D3 : 7C 		"|"		mov	a,h
+05D4 : A7 		" "		ana	a
+05D5 : CC 02 06 	"   "		cz	L0602		;adjust CPU RAM bank (toggle)
+05D8 : 0D 		" "		dcr	c		;
+05D9 : C2 CF 05 	"   "		jnz	L05CF		;copy next byte
+05DC : C3 59 02 	" Y "		jmp	L0259		;enable CPU board
+
+				;--------------------------------
+				;Test Write Protect
+				;--------------------------------
+				
+05DF				L05DF:
+05DF : 2E 04 		". "		mvi	l,$04		;Sense Drive Status
+05E1 : CD 6A 06 	" j "		call	L066A		;Write FDC Command
+05E4 : CD 85 06 	"   "		call	L0685		;read FDC data
+05E7 : 32 4D 2B 	"2M+"		sta	$2B4D		;FDC ST3 var
+05EA : E6 40 		" @"		ani	$40		;Test Write protect
+05EC : C9 		" "		ret			
+
+				;---------------------------------------
+				; select CPU RAM
+				;---------------------------------------
+				
+                                ;the CPU BOARD RAM is addressable in upper 32K memory space
+                                ;CPU BOARD RAM is plsit into two 32K RAM banks.
+                                
+05ED				L05ED:
+05ED : 7C 		"|"		mov	a,h		;test if upper or lower banks
+05EE : E6 80 		"  "		ani	$80		;should be selected
+05F0 : 3E FE 		"> "		mvi	a,$FE		;upper 32K Bank
+05F2 : C2 F7 05 	"   "		jnz	L05F7		;select upper
+
+05F5 : 3E FF 		"> "		mvi	a,$FF		;else lower 32K RAM bank
+
+				;select CPU RAM (sub)
+				
+				;CPU Board RAM is accessed through 8000-FFFF only
+				
+05F7				L05F7:
+05F7 : 32 54 2B 	"2T+"		sta	$2B54		;CPU bank select flag
+05FA : 32 00 00 	"2  "		sta	L0000		;select CPU board RAM bank 
+05FD : 7C 		"|"		mov	a,h
+05FE : F6 80 		"  "		ori	$80		;make address always
+0600 : 67 		"g"		mov	h,a		;range $8000+
+0601 : C9 		" "		ret
+
+				;-------------------------------
+				;toggle CPU RAM bank
+				;-------------------------------
+				
+                                ;called to handle 32K page overflow
+                                
+0602				L0602:
+0602 : 3A 54 2B 	":T+"		lda	$2B54		;CPU bank select flag
+0605 : FE FF 		"  "		cpi	$FF		;Test Lower 32K Bank
+0607 : 3E FF 		"> "		mvi	a,$FF		;Lower 32K
+0609 : C2 F7 05 	"   "		jnz	L05F7		;was upper set lower
+060C : 3E FE 		"> "		mvi	a,$FE		;Upper 32K
+060E : C3 F7 05 	"   "		jmp	L05F7		;set CPU RAM bank
+
+				;--------------------------------
+				
+0611				L0611:
+0611 : 3A 4E 2B 	":N+"		lda	$2B4E
+0614 : 06 07 		"  "		mvi	b,$07
+0616				L0616:
+0616 : 07 		" "		rlc
+0617 : 48 		"H"		mov	c,b
+0618 : DA 2D 06 	" - "		jc	L062D
+061B : 05 		" "		dcr	b
+061C : C2 16 06 	"   "		jnz	L0616
+061F : 3A 4F 2B 	":O+"		lda	$2B4F
+0622 : 0F 		" "		rrc
+0623 : 3E 55 		">U"		mvi	a,$55
+0625 : D2 3A 06 	" : "		jnc	L063A
+
+0628 : 3E 0F 		"> "		mvi	a,$0F
+062A : C3 3A 06 	" : "		jmp	L063A
+				;
+062D				L062D:
+062D : 79 		"y"		mov	a,c
+062E : FE 06 		"  "		cpi	$06
+0630 : CA 3F 06 	" ? "		jz	L063F
+0633 : 06 00 		"  "		mvi	b,$00
+0635 : 21 4E 06 	"!N "		lxi	h,$064E
+0638 : 09 		" "		dad	b
+0639 : 7E 		"~"		mov	a,m
+
+				;-----------------------------------------
+				;disk error
+				;-----------------------------------------
+				
+063A				L063A:
+063A : 32 4C 2B 	"2L+"		sta	$2B4C	;error code
+063D : A7 		" "		ana	a	;signal error
+063E : C9 		" "		ret
+
+				;-----------------------------------------
+				
+063F				L063F:
+063F : 3A 4F 2B 	":O+"		lda	$2B4F
+0642 : E6 20 		"  "		ani	$20
+0644 : 3E 0A 		"> "		mvi	a,$0A
+0646 : CA 3A 06 	" : "		jz	L063A
+0649 : 3E 02 		"> "		mvi	a,$02
+064B : C3 3A 06 	" : "		jmp	L063A
+				;
+064E : 0E 40 		" @"		mvi	c,$40
+0650 : 0E 55 		" U"		mvi	c,$55
+				;
+0652 : 10 		" "		db	$10
+				;
+0653 : 02 		" "		stax	b
+0654 : AA 		" "		xra	d
+				;
+0655 : 08 		" "		db	$08
+
+				;invalid sector error
+				
+0656				L0656:
+0656 : 3E 08 		"> "		mvi	a,$08
+0658 : C3 3A 06 	" : "		jmp	L063A
+
+				;------------------------
+				;FDD Seek error
+				;------------------------
+				
+065B				L065B:
+065B : 3E 04 		"> "		mvi	a,$04
+065D : C3 3A 06 	" : "		jmp	L063A	;set error
+				;
+0660				L0660:
+0660 : 3E 40 		">@"		mvi	a,$40
+0662 : C3 3A 06 	" : "		jmp	L063A
+
+				;Write protect error
+				
+0665				L0665:
+0665 : 3E 20 		"> "		mvi	a,$20
+0667 : C3 3A 06 	" : "		jmp	L063A
+
+				;--------------------------------
+				;Write FDC Command
+				;--------------------------------
+				
+066A				L066A:
+066A : 4D 		"M"		mov	c,l		;write command
+066B : CD 78 06 	" x "		call	L0678		;Write FDC data
+066E : 3A 44 2B 	":D+"		lda	$2B44		;get drive
+0671 : 0F 		" "		rrc			;move drive to
+0672 : 0F 		" "		rrc			;lower nibble
+0673 : 0F 		" "		rrc
+0674 : 0F 		" "		rrc		
+0675 : E6 03 		"  "		ani	$03		;only two drives available
+0677 : 4F 		"O"		mov	c,a		;write drives
+
+				;-------------------------------
+				;Write FDC data
+				;-------------------------------
+				
+				;Entry:
+				;	C = data to write
+					
+0678				L0678:
+0678 : DB 40 		" @"		in	$40		;FDD Status 		
+067A : E6 C0 		"  "		ani	$C0		;keep RQM and DIO	
+067C : FE 80 		"  "		cpi	$80		;Data to FDC and ready
+067E : C2 78 06 	" x "		jnz	L0678		;Wait until ready
+
+0681 : 79 		"y"		mov	a,c		
+0682 : D3 41 		" A"		out	$41		;Write FDC data
+0684 : C9 		" "		ret
+
+				;-------------------------------
+				;read FDC data
+				;-------------------------------
+				
+				;exit:
+				;	A = data
+				
+0685				L0685:
+0685 : DB 40 		" @"		in	$40	;FDC status
+0687 : E6 C0 		"  "		ani	$C0	;keep RQM and DIO
+0689 : FE C0 		"  "		cpi	$C0	;test Data to CPU and Ready 
+068B : C2 85 06 	"   "		jnz	L0685	;Wait until ready
+068E : DB 41 		" A"		in	$41	;Read Data
+0690 : C9 		" "		ret
+
+				;-------------------------------
+				;Test FDD Ready
+				;-------------------------------
+				
+0691				L0691:
+0691 : CD DF 05 	"   "		call	L05DF		;Test Write Protect
+0694 : 3A 4D 2B 	":M+"		lda	$2B4D		;FDC ST3 var
+0697 : E6 20 		"  "		ani	$20		;Test FDD Ready
+0699 : C9 		" "		ret
+				;
+069A				L069A:
+069A : 3E FF 		"> "		mvi	a,$FF		;signal wait for FDC command to complete ?
+069C : 32 55 2B 	"2U+"		sta	$2B55		;
+069F : C3 7D 01 	" } "		jmp	L017D		;I/O main loop
+
+				;un jused code ?
+				
+06A2 : DB 52 		" R"		in	$52		;8255 PPI port C
+06A4 : E6 10 		"  "		ani	$10		;
+06A6 : CA 9A 06 	"   "		jz	L069A
+06A9 : C9 		" "		ret
+
+				;Device C Write WORD to 8253 Timer 0
+				
+06AA				L06AA:
+06AA : 2A 24 FF 	"*$ "		lhld	$FF24		;output word to port 0C
+06AD : 7D 		"}"		mov	a,l		
+06AE : D3 0C 		"  "		out	$0C
+06B0 : 7C 		"|"		mov	a,h
+06B1 : D3 0C 		"  "		out	$0C
+06B3 : AF 		" "		xra	a		;signal ready
+06B4 : 32 26 FF 	"2& "		sta	$FF26
+06B7 : C9 		" "		ret
+
+				;-------------------------------
+				;Test 4K ROM checksum
+				;-------------------------------
+				
+				;XORs all the bytes in ROM together
+				
+				;Returns with A=0,Z if ROM is OK
+				
+06B8				L06B8:
+06B8 : 21 FF 0F 	"!  "		lxi	h,$0FFF	;
+06BB : 06 00 		"  "		mvi	b,$00	;CHECKSUM
+06BD				L06BD:
+06BD : 7E 		"~"		mov	a,m	
+06BE : A8 		" "		xra	b
+06BF : 47 		"G"		mov	b,a
+06C0 : 2B 		"+"		dcx	h
+06C1 : 7D 		"}"		mov	a,l
+06C2 : B4 		" "		ora	h
+06C3 : C2 BD 06 	"   "		jnz	L06BD	;loop untill addr 0
+06C6 : 78 		"x"		mov	a,b
+06C7 : AE 		" "		xra	m	;do addr 0 also
+06C8 : C9 		" "		ret
+
+				;-------------------------------
+				;Test 4K RAM 
+				;-------------------------------
+				
+06C9				L06C9:
+06C9 : 21 00 20 	"!  "		lxi	h,$2000		;Video RAM
+06CC : 0E AA 		"  "		mvi	c,$AA		;Test pattern
+06CE : 11 FF 55 	"  U"		lxi	d,$55FF		;
+06D1				L06D1:
+06D1 : AF 		" "		xra	a
+06D2 : 46 		"F"		mov	b,m		;save value
+06D3 : 77 		"w"		mov	m,a		;test 00
+06D4 : AE 		" "		xra	m		
+06D5 : C0 		" "		rnz			;ret Error
+06D6 : 71 		"q"		mov	m,c		;test AA
+06D7 : 7E 		"~"		mov	a,m
+06D8 : A9 		" "		xra	c
+06D9 : C0 		" "		rnz			;ret error
+06DA : 72 		"r"		mov	m,d		;55
+06DB : 7E 		"~"		mov	a,m
+06DC : AA 		" "		xra	d
+06DD : C0 		" "		rnz			;ret error
+06DE : 73 		"s"		mov	m,e		;FF
+06DF : 7E 		"~"		mov	a,m
+06E0 : AB 		" "		xra	e
+06E1 : C0 		" "		rnz			;ret error
+06E2 : 70 		"p"		mov	m,b		;restore value
+06E3 : 23 		"#"		inx	h		
+06E4 : 7C 		"|"		mov	a,h	
+06E5 : FE 30 		" 0"		cpi	$30		;End of RAM ?
+06E7 : C2 D1 06 	"   "		jnz	L06D1		
+06EA : AF 		" "		xra	a		;signal RAM OK
+06EB : C9 		" "		ret
+
+				;--------------------------------
+				;rst 7.5 interrupt part 2
+				;--------------------------------
+				
+06EC				L06EC:
+06EC : F5 		" "		push	psw	;save registers
+06ED : C5 		" "		push	b
+06EE : D5 		" "		push	d
+06EF : E5 		" "		push	h
+06F0 : 3E 10 		"> "		mvi	a,$10	;interrupt mask
+06F2 : 30 		"0"		sim		;set it
+06F3 : FB 		" "		ei
+06F4 : 21 1A 02 	"!  "		lxi	h,L021A	;stack interrupt return addr
+06F7 : E5 		" "		push	h
+06F8 : 16 0D 		"  "		mvi	d,$0D	;14 keyboard rows ?
+06FA : 21 56 2B 	"!V+"		lxi	h,$2B56	;14 byte keyboard buffer
+06FD : 1E 00 		"  "		mvi	e,$00	;Key counter
+06FF : 3A 7A 2B 	":z+"		lda	$2B7A	;Port 02 ram CAPS LOCK var ?
+0702 : E6 F0 		"  "		ani	$F0	;only high bits relevant
+0704 : 4F 		"O"		mov	c,a	;
+0705				L0705:
+0705 : 79 		"y"		mov	a,c	;
+0706 : B2 		" "		ora	d	;or key row 0D..00
+0707 : D3 02 		"  "		out	$02	;select it
+0709 : 7E 		"~"		mov	a,m	;old state
+070A : 2F 		"/"		cma		;complement to detect change
+070B : 47 		"G"		mov	b,a	;
+070C : DB 01 		"  "		in	$01	;read key status on keyboard row ?
+070E : 77 		"w"		mov	m,a	;new state
+070F : A0 		" "		ana	b	;keep only changes	
+0710 : CA 1B 07 	"   "		jz	L071B	;skip if no change
+
+0713 : 32 64 2B 	"2d+"		sta	$2B64	;number of changed keys on row 
+0716 : 7A 		"z"		mov	a,d	;
+0717 : 32 65 2B 	"2e+"		sta	$2B65   ;last scaned keyboard row with change
+071A : 1C 		" "		inr	e	;count of keyboardrows with changes ?
+071B				L071B:
+071B : 23 		"#"		inx	h	;next buffer addr
+071C : 15 		" "		dcr	d	;next key row ?
+071D : F2 05 07 	"   "		jp	L0705	;loop until scanned all keyboard rows?
+
+0720 : 7B 		"{"		mov	a,e	;number of keyboard rows with changes ?
+0721 : 32 6B 2B 	"2k+"		sta	$2B6B	;key row changes 
+0724 : 3A 6C 2B 	":l+"		lda	$2B6C	;
+0727 : A7 		" "		ana	a
+0728 : CA 41 07 	" A "		jz	L0741	;skip..
+
+072B : CD AD 07 	"   "		call	L07AD	;test keystate
+072E : CA 41 07 	" A "		jz	L0741	;skip
+
+0731 : CD C1 07 	"   "		call	L07C1
+0734 : 6F 		"o"		mov	l,a
+0735 : 60 		"`"		mov	h,b
+0736 : 22 69 2B 	""i+"		shld	$2B69	;
+0739 : CD 88 08 	"   "		call	L0888
+073C : 3E 3C 		"><"		mvi	a,$3C
+073E : 32 6D 2B 	"2m+"		sta	$2B6D
+0741				L0741:
+0741 : AF 		" "		xra	a	;
+0742 : 32 6C 2B 	"2l+"		sta	$2B6C
+0745 : 3A 6B 2B 	":k+"		lda	$2B6B	;key changes
+0748 : FE 01 		"  "		cpi	$01	;one key changed?
+074A : C2 7A 07 	" z "		jnz	L077A	;else
+
+074D : 06 00 		"  "		mvi	b,$00	;no keys set
+074F : 16 08 		"  "		mvi	d,$08	;8 bits to rotate
+0751 : 3A 64 2B 	":d+"		lda	$2B64	;number of changed keys on row 
+0754				L0754:
+0754 : 17 		" "		ral		;convert bit to number
+0755 : D2 5A 07 	" Z "		jnc	L075A	;
+0758 : 04 		" "		inr	b	;inc changed key count
+0759 : 5A 		"Z"		mov	e,d	;key bit number
+075A				L075A:
+075A : 15 		" "		dcr	d
+075B : C2 54 07 	" T "		jnz	L0754	;loop for 8 keys
+075E : 78 		"x"		mov	a,b
+075F : FE 01 		"  "		cpi	$01	;test single key change
+0761 : C2 74 07 	" t "		jnz	L0774	;skip if more then one key changed
+
+0764 : 7B 		"{"		mov	a,e	;get key bit number
+0765 : 3D 		"="		dcr	a	;range 7..0
+0766 : 32 68 2B 	"2h+"		sta	$2B68	;
+0769 : 2A 64 2B 	"*d+"		lhld	$2B64	;number of changed keys on row 
+076C : 22 66 2B 	""f+"		shld	$2B66	;
+076F : 3E 01 		"> "		mvi	a,$01	;Signal raw key input?
+0771 : 32 6C 2B 	"2l+"		sta	$2B6C	;
+0774				L0774:			
+0774 : 3E FF 		"> "		mvi	a,$FF	;signal invalid/no key
+0776 : 32 6D 2B 	"2m+"		sta	$2B6D
+0779 : C9 		" "		ret
+				;-----------------------
+077A				L077A:
+077A : A7 		" "		ana	a
+077B : C2 74 07 	" t "		jnz	L0774
+077E : 21 6D 2B 	"!m+"		lxi	h,$2B6D
+0781 : 7E 		"~"		mov	a,m
+0782 : FE FF 		"  "		cpi	$FF
+0784 : C8 		" "		rz
+0785 : 35 		"5"		dcr	m
+0786 : C0 		" "		rnz
+0787 : CD AD 07 	"   "		call	L07AD
+078A : CA 74 07 	" t "		jz	L0774
+078D : CD C1 07 	"   "		call	L07C1
+0790 : 21 69 2B 	"!i+"		lxi	h,$2B69
+0793 : BE 		" "		cmp	m
+0794 : C2 A5 07 	"   "		jnz	L07A5
+0797 : 23 		"#"		inx	h
+0798 : 78 		"x"		mov	a,b
+0799 : BE 		" "		cmp	m
+079A : C2 A7 07 	"   "		jnz	L07A7
+079D : 3E 06 		"> "		mvi	a,$06
+079F				L079F:
+079F : 32 6D 2B 	"2m+"		sta	$2B6D
+07A2 : C3 88 08 	"   "		jmp	L0888
+				;
+07A5				L07A5:
+07A5 : 77 		"w"		mov	m,a
+07A6 : 23 		"#"		inx	h
+07A7				L07A7:
+07A7 : 70 		"p"		mov	m,b
+07A8 : 3E 3C 		"><"		mvi	a,$3C
+07AA : C3 9F 07 	"   "		jmp	L079F
+
+				;-------------------------------------
+				
+07AD				L07AD:
+07AD : 21 56 2B 	"!V+"		lxi	h,$2B56	;14 byte keyboard buffer
+07B0 : 3A 67 2B 	":g+"		lda	$2B67	;
+07B3 : 47 		"G"		mov	b,a	;
+07B4 : 3E 0D 		"> "		mvi	a,$0D	;Key rows
+07B6 : 90 		" "		sub	b	;get buffer index	
+07B7 : 5F 		"_"		mov	e,a	;
+07B8 : 16 00 		"  "		mvi	d,$00
+07BA : 19 		" "		dad	d	;point to key row key status
+07BB : 46 		"F"		mov	b,m	;
+07BC : 3A 66 2B 	":f+"		lda	$2B66	;last raw key state
+07BF : A0 		" "		ana	b	;and with new state
+07C0 : C9 		" "		ret		;
+
+				;-------------------------------------
+				;KEy Decode
+				
+				;Decodes key code to ascii value
+				
+07C1				L07C1:
+07C1 : 2A 67 2B 	"*g+"		lhld	$2B67	;key row of key
+07C4 : 26 00 		"& "		mvi	h,$00	
+07C6 : 29 		")"		dad	h	;Row * 8
+07C7 : 29 		")"		dad	h
+07C8 : 29 		")"		dad	h
+07C9 : 3A 68 2B 	":h+"		lda	$2B68	;key bit number
+07CC : 5F 		"_"		mov	e,a
+07CD : 16 00 		"  "		mvi	d,$00
+07CF : 19 		" "		dad	d
+07D0 : EB 		" "		xchg		;DE=keycode
+07D1 : 0E 00 		"  "		mvi	c,$00	;Shifted keys?
+07D3 : DB 00 		"  "		in	$00	
+07D5 : E6 01 		"  "		ani	$01	;Test Shift/ctrl ?
+07D7 : C2 25 08 	" % "		jnz	L0825
+
+07DA : 3A 6F 2B 	":o+"		lda	$2B6F	;Caps lock ?
+07DD : A7 		" "		ana	a
+07DE : CA E3 07 	"   "		jz	L07E3	;
+
+07E1 : 0E 02 		"  "		mvi	c,$02	;Shift?
+07E3				L07E3:
+07E3 : DB 00 		"  "		in	$00
+07E5 : E6 02 		"  "		ani	$02	;Test shift/ctrl?
+07E7 : CA EB 07 	"   "		jz	L07EB	
+07EA : 0C 		" "		inr	c	;shift?
+07EB				L07EB:
+07EB : 21 70 00 	"!p "		lxi	h,$0070	;112 keys ?
+07EE : CD 77 08 	" w "		call	L0877	;Multiply HL = C * HL
+07F1 : 19 		" "		dad	d
+07F2 : 11 FB 0D 	"   "		lxi	d,$0DFB	;KeyTable?
+07F5 : 19 		" "		dad	d
+07F6 : 46 		"F"		mov	b,m
+07F7 : 21 0E 00 	"!  "		lxi	h,$000E
+07FA : CD 77 08 	" w "		call	L0877	;Multiply HL = C * HL
+07FD : 11 DB 0E 	"   "		lxi	d,$0EDB
+0800 : 19 		" "		dad	d
+0801 : EB 		" "		xchg
+0802 : 2A 67 2B 	"*g+"		lhld	$2B67
+0805 : 26 00 		"& "		mvi	h,$00
+0807 : 19 		" "		dad	d
+0808 : 4E 		"N"		mov	c,m
+0809 : 3A 66 2B 	":f+"		lda	$2B66
+080C : A1 		" "		ana	c
+080D : 3E 01 		"> "		mvi	a,$01
+080F : C0 		" "		rnz
+0810 : 3A 6E 2B 	":n+"		lda	$2B6E	;CAPSLOCK?
+0813 : A7 		" "		ana	a
+0814 : C8 		" "		rz
+
+				;Change char B to upper case
+				
+0815 : 78 		"x"		mov	a,b	;get 
+0816 : FE 61 		" a"		cpi	$61	;<a
+0818 : DA 4C 08 	" L "		jc	L084C	;exit < a
+081B : FE 7B 		" {"		cpi	$7B	
+081D : D2 4C 08 	" L "		jnc	L084C	;exit > z
+0820 : D6 20 		"  "		sui	$20	;make capital
+0822 : 47 		"G"		mov	b,a	;uper case chr in B
+0823 : AF 		" "		xra	a
+0824 : C9 		" "		ret
+
+				;----------------------------
+				
+0825				L0825:
+0825 : 0E 00 		"  "		mvi	c,$00
+0827 : D5 		" "		push	d
+0828 : CD EB 07 	"   "		call	L07EB
+082B : D1 		" "		pop	d
+082C : A7 		" "		ana	a
+082D : CA 53 08 	" S "		jz	L0853
+
+0830 : 78 		"x"		mov	a,b
+0831 : FE 64 		" d"		cpi	$64
+0833 : DA 72 08 	" r "		jc	L0872
+0836 : FE 7A 		" z"		cpi	$7A
+0838 : D2 72 08 	" r "		jnc	L0872
+083B : DB 00 		"  "		in	$00	
+083D : E6 02 		"  "		ani	$02		;test ctrl/shift?
+083F : CA 4E 08 	" N "		jz	L084E
+
+0842 : 78 		"x"		mov	a,b
+0843 : FE 79 		" y"		cpi	$79		;
+0845 : CA 72 08 	" r "		jz	L0872
+0848 : 3E 87 		"> "		mvi	a,$87
+084A				L084A:
+084A : 80 		" "		add	b
+084B : 47 		"G"		mov	b,a
+084C				L084C:
+084C : AF 		" "		xra	a
+084D : C9 		" "		ret
+
+				;---------------------
+				
+084E				L084E:
+084E : 3E 1C 		"> "		mvi	a,$1C
+0850 : C3 4A 08 	" J "		jmp	L084A
+				;
+0853				L0853:
+0853 : 78 		"x"		mov	a,b
+0854 : FE 40 		" @"		cpi	$40
+0856 : DA 63 08 	" c "		jc	L0863
+0859 : FE 60 		" `"		cpi	$60
+085B : D2 63 08 	" c "		jnc	L0863
+085E				L085E:
+085E : D6 40 		" @"		sui	$40
+0860 : 47 		"G"		mov	b,a
+0861 : AF 		" "		xra	a
+0862 : C9 		" "		ret
+				;
+0863				L0863:
+0863 : 21 6B 0E 	"!k "		lxi	h,$0E6B
+0866 : 19 		" "		dad	d
+0867 : 7E 		"~"		mov	a,m
+0868 : FE 40 		" @"		cpi	$40
+086A : DA 72 08 	" r "		jc	L0872
+086D : FE 60 		" `"		cpi	$60
+086F : DA 5E 08 	" ^ "		jc	L085E
+0872				L0872:
+0872 : 3E 01 		"> "		mvi	a,$01
+0874 : 06 FF 		"  "		mvi	b,$FF
+0876 : C9 		" "		ret
+				;--------------------------
+				;Multiply HL = C * HL
+				;--------------------------
+				
+0877				L0877:
+0877 : D5 		" "		push	d	;save DE
+0878 : EB 		" "		xchg		;HL to DE
+0879 : 21 00 00 	"!  "		lxi	h,L0000 ;result
+087C : AF 		" "		xra	a	
+087D				L087D:
+087D : B9 		" "		cmp	c	
+087E : CA 86 08 	"   "		jz	L0886	;done
+0881 : 19 		" "		dad	d	;HL=HL+DE
+0882 : 3C 		"<"		inr	a	
+0883 : C3 7D 08 	" } "		jmp	L087D	;loop
+				;
+0886				L0886:
+0886 : D1 		" "		pop	d
+0887 : C9 		" "		ret
+				
+				;-------------------------------
+				
+0888				L0888:
+0888 : 21 69 2B 	"!i+"		lxi	h,$2B69
+088B : 7E 		"~"		mov	a,m
+088C : A7 		" "		ana	a
+088D : CA BD 08 	"   "		jz	L08BD	;
+
+0890 : 23 		"#"		inx	h	;2B6A
+0891 : 7E 		"~"		mov	a,m	;get key value
+0892 : 11 7A 2B 	" z+"		lxi	d,$2B7A	;keyboard output (caps lock light?)
+0895 : FE 80 		"  "		cpi	$80	;test special keys?
+0897 : DA B8 08 	"   "		jc	L08B8	;normal keys
+089A : CA C4 08 	"   "		jz	L08C4	;..
+089D : FE 81 		"  "		cpi	$81
+089F : CA CD 08 	"   "		jz	L08CD	;..
+08A2 : FE 82 		"  "		cpi	$82	;CAPSLOCK key
+08A4 : CA DA 08 	"   "		jz	L08DA	;Toggle CAPS LOCK
+08A7 : FE 83 		"  "		cpi	$83	;'000' Key
+08A9 : C2 74 07 	" t "		jnz	L0774	;
+
+08AC : 06 03 		"  "		mvi	b,$03	;3 chars
+08AE				L08AE:
+08AE : 0E 30 		" 0"		mvi	c,$30	;'0'
+08B0 : CD F1 08 	"   "		call	L08F1	;Key C to Buffer
+08B3 : 05 		" "		dcr	b
+08B4 : C2 AE 08 	"   "		jnz	L08AE	
+08B7 : C9 		" "		ret
+				;
+08B8				L08B8:
+08B8 : 0E 1B 		"  "		mvi	c,$1B
+08BA : CD F1 08 	"   "		call	L08F1	;Key C to Buffer
+08BD				L08BD:
+08BD : 3A 6A 2B 	":j+"		lda	$2B6A	;Key value
+08C0 : 4F 		"O"		mov	c,a
+08C1 : C3 F1 08 	"   "		jmp	L08F1	;Key C to Buffer
+
+				;------------------------
+				
+08C4				L08C4:
+08C4 : AF 		" "		xra	a
+08C5 : 32 6F 2B 	"2o+"		sta	$2B6F
+08C8 : 06 10 		"  "		mvi	b,$10	;Keyboard .. output
+08CA : C3 D4 08 	"   "		jmp	L08D4
+
+				;------------------------
+				
+08CD				L08CD:
+08CD : 3E 01 		"> "		mvi	a,$01
+08CF : 32 6F 2B 	"2o+"		sta	$2B6F
+08D2 : 06 40 		" @"		mvi	b,$40	;Keyboard .. output
+08D4				L08D4:
+08D4 : 1A 		" "		ldax	d
+08D5 : E6 20 		"  "		ani	$20	;Caps lock light?
+08D7 : B0 		" "		ora	b
+08D8 : 12 		" "		stax	d
+08D9 : C9 		" "		ret
+
+				;Toggle CAPS LOCK
+				
+08DA				L08DA:
+08DA : 21 6E 2B 	"!n+"		lxi	h,$2B6E	;CAPSLOCK?
+08DD : 7E 		"~"		mov	a,m
+08DE : 36 00 		"6 "		mvi	m,$00	;clear CAPS lock
+08E0 : A7 		" "		ana	a	;was it set?
+08E1 : 1A 		" "		ldax	d
+08E2 : C2 ED 08 	"   "		jnz	L08ED	;jr was set
+
+08E5 : 36 01 		"6 "		mvi	m,$01	;CAPS LOCK ON 
+08E7 : F6 20 		"  "		ori	$20	;A=$20
+08E9 : 12 		" "		stax	d	;set bit 5
+08EA : C3 74 07 	" t "		jmp	L0774
+				;
+08ED				L08ED:
+08ED : E6 50 		" P"		ani	$50	;clear bit 5
+08EF : 12 		" "		stax	d
+08F0 : C9 		" "		ret
+
+				;--------------------------------
+				;Key C to keyboard Buffer
+				;--------------------------------
+				
+08F1				L08F1:
+08F1 : 2A 78 2B 	"*x+"		lhld	$2B78		;key buffer pos
+08F4 : EB 		" "		xchg
+08F5 : 3A 79 2B 	":y+"		lda	$2B79		;key buffer pos
+08F8 : 3D 		"="		dcr	a
+08F9 : E6 07 		"  "		ani	$07
+08FB : BB 		" "		cmp	e		;cur pos
+08FC : C8 		" "		rz			;same pos
+
+08FD : 21 70 2B 	"!p+"		lxi	h,$2B70		;keyboard buffer
+0900 : 16 00 		"  "		mvi	d,$00
+0902 : 19 		" "		dad	d
+0903 : 71 		"q"		mov	m,c		;store key
+0904 : 7B 		"{"		mov	a,e
+0905 : 3C 		"<"		inr	a		;update pos
+0906 : E6 07 		"  "		ani	$07
+0908 : 32 78 2B 	"2x+"		sta	$2B78		;new pos
+090B : C9 		" "		ret
+
+				;--------------------------------------------
+				;Update Clock
+				;--------------------------------------------
+				
+090C				L090C:
+090C : 21 81 2B 	"! +"		lxi	h,$2B81	;frames counter ?
+090F : 7E 		"~"		mov	a,m
+0910 : 3D 		"="		dcr	a	;line counter - 1 ?
+0911 : 77 		"w"		mov	m,a
+0912 : C0 		" "		rnz	
+
+0913 : 36 32 		"62"		mvi	m,$32	;50 frames
+0915 : 06 60 		" `"		mvi	b,$60	;60 seconds & minutes
+0917 : CD 21 09 	" ! "		call	L0921	;Increase seconds
+091A : C0 		" "		rnz
+
+091B : CD 21 09 	" ! "		call	L0921	;Increase Minutes
+091E : C0 		" "		rnz
+
+091F : 06 24 		" $"		mvi	b,$24	;Hours
+
+				;inc BCD value
+				
+0921				L0921:
+0921 : 2B 		"+"		dcx	h	;2B80 BCD counter
+0922 : 7E 		"~"		mov	a,m	
+0923 : 3C 		"<"		inr	a	;count +
+0924 : 27 		"'"		daa
+0925 : B8 		" "		cmp	b	;60 Lines ?
+0926 : 77 		"w"		mov	m,a
+0927 : C0 		" "		rnz		
+
+0928 : 36 00 		"6 "		mvi	m,$00	;Reset counter
+092A : C9 		" "		ret
+
+				;------------------------------------------------
+				;Device A read/write 6 byte structure
+				
+				;BC points to a 6 byte structure where the 6th byte
+				;tells if it should be read or written.
+				
+				;Note structure may not cross 32K boundary
+				
+092B				L092B:
+092B : 2A 1E FF 	"*  "		lhld	$FF1E	;device data pointer
+092E : E5 		" "		push	h
+092F : CD ED 05 	"   "		call	L05ED	;Select CPU RAM
+0932 : EB 		" "		xchg
+0933 : 21 05 00 	"!  "		lxi	h,$0005	;+5
+0936 : 19 		" "		dad	d
+0937 : 7E 		"~"		mov	a,m	;get byte at ptr+5
+0938 : FE FF 		"  "		cpi	$FF	;FF=read else write
+093A : E1 		" "		pop	h
+093B : 11 7B 2B 	" {+"		lxi	d,$2B7B	;6 byte buffer
+093E : 0E 06 		"  "		mvi	c,$06	;6 bytes
+0940 : CA 4B 09 	" K "		jz	L094B	;Write to CPU RAM
+
+				;set
+0943 : CD CC 05 	"   "		call	L05CC	;Read CPU RAM (C bytes from CPU ram at HL to DE)
+
+0946				L0946:
+0946 : AF 		" "		xra	a
+0947 : 32 20 FF 	"2  "		sta	$FF20	;signal ready
+094A : C9 		" "		ret
+				;Get
+				
+094B				L094B:
+094B : CD B9 05 	"   "		call	L05B9	;Write CPU RAM (C bytes to CPU ram from DE to HL)
+094E : C3 46 09 	" F "		jmp	L0946	;signal ready
+
+				;-------------------------------
+				;CRT Device handler
+				;-------------------------------
+				
+0951				L0951:
+0951 : 3A 88 2B 	": +"		lda	$2B88		;special handler set ?
+0954 : FE FF 		"  "		cpi	$FF
+0956 : CA 5F 09 	" _ "		jz	L095F		;jmp if so
+
+				;test control characters
+				
+0959 : 79 		"y"		mov	a,c		;get chr
+095A : FE 20 		"  "		cpi	$20		;test control
+095C : DA 63 09 	" c "		jc	L0963		;jmp control character
+095F				L095F:
+095F : 2A 82 2B 	"* +"		lhld	$2B82		;CRT handler addr
+0962 : E9 		" "		pchl			;execute it
+
+				;handle control characters
+				
+0963				L0963:
+0963 : FE 1B 		"  "		cpi	$1B		;ESC ?
+0965 : CA 0A 0B 	"   "		jz	L0B0A
+0968 : FE 07 		"  "		cpi	$07		;BELL ?
+096A : CA 04 0B 	"   "		jz	L0B04
+096D : FE 08 		"  "		cpi	$08		;
+096F : CA 62 0B 	" b "		jz	L0B62
+0972 : FE 09 		"  "		cpi	$09		;
+0974 : CA 1B 0B 	"   "		jz	L0B1B
+0977 : FE 0A 		"  "		cpi	$0A		;LF
+0979 : CA 3C 0D 	" < "		jz	L0D3C
+097C : FE 0D 		"  "		cpi	$0D		;CR
+097E : CA 35 0D 	" 5 "		jz	L0D35
+0981 : FE 10 		"  "		cpi	$10		;
+0983 : CA F8 0A 	"   "		jz	L0AF8
+0986 : C9 		" "		ret			;ignore other control characters
+
+				;-
+				
+0987 : 79 		"y"		mov	a,c
+0988 : FE 20 		"  "		cpi	$20
+098A : D8 		" "		rc
+098B : FE 7F 		"  "		cpi	$7F
+098D : C8 		" "		rz
+098E : 2A 8A 2B 	"* +"		lhld	$2B8A	;Display addr
+0991 : 71 		"q"		mov	m,c
+0992 : 3A 8C 2B 	": +"		lda	$2B8C	;Column
+0995 : FE 4F 		" O"		cpi	$4F
+0997 : C2 44 0B 	" D "		jnz	L0B44
+099A : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+099D : FE 17 		"  "		cpi	$17
+099F : C2 44 0B 	" D "		jnz	L0B44
+09A2 : AF 		" "		xra	a
+09A3 : 32 8C 2B 	"2 +"		sta	$2B8C	;Column
+09A6				L09A6:
+09A6 : CD B8 09 	"   "		call	L09B8
+09A9 : CA 87 0B 	"   "		jz	L0B87	;
+
+09AC : 3E 17 		"> "		mvi	a,$17
+09AE : 32 8D 2B 	"2 +"		sta	$2B8D	;Line
+09B1				L09B1:
+09B1 : AF 		" "		xra	a
+09B2 : CD 0F 0C 	"   "		call	L0C0F
+09B5 : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+
+				;Test ..
+				
+09B8				L09B8:
+09B8 : 3A 89 2B 	": +"		lda	$2B89	;
+09BB : FE 00 		"  "		cpi	$00
+09BD : C9 		" "		ret
+				;
+09BE : 21 87 09 	"!  "		lxi	h,$0987
+09C1 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+09C4 : 79 		"y"		mov	a,c
+09C5 : FE 61 		" a"		cpi	$61
+09C7 : CA 02 0D 	"   "		jz	L0D02
+09CA : FE 5B 		" ["		cpi	$5B
+09CC : D0 		" "		rnc
+09CD : D6 3F 		" ?"		sui	$3F
+09CF : D8 		" "		rc
+09D0 : 87 		" "		add	a
+09D1 : 5F 		"_"		mov	e,a
+09D2 : 16 00 		"  "		mvi	d,$00
+09D4 : 21 C0 0A 	"!  "		lxi	h,$0AC0
+09D7 : 19 		" "		dad	d
+09D8 : 5E 		"^"		mov	e,m
+09D9 : 23 		"#"		inx	h
+09DA : 66 		"f"		mov	h,m
+09DB : 6B 		"k"		mov	l,e
+09DC : E9 		" "		pchl			;INFO: index jump
+				;
+09DD : 79 		"y"		mov	a,c
+09DE : D6 20 		"  "		sui	$20
+09E0 : 32 85 2B 	"2 +"		sta	$2B85
+09E3 : 21 EA 09 	"!  "		lxi	h,$09EA
+09E6 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+09E9 : C9 		" "		ret
+				;
+09EA : 21 87 09 	"!  "		lxi	h,$0987
+09ED : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+09F0 : 79 		"y"		mov	a,c
+09F1 : D6 20 		"  "		sui	$20
+09F3 : FE 50 		" P"		cpi	$50
+09F5 : D0 		" "		rnc
+09F6 : 47 		"G"		mov	b,a
+09F7 : 3A 85 2B 	": +"		lda	$2B85
+09FA : FE 18 		"  "		cpi	$18
+09FC : D0 		" "		rnc
+09FD : 32 8D 2B 	"2 +"		sta	$2B8D	;Line
+0A00 : 78 		"x"		mov	a,b
+0A01 : 32 8C 2B 	"2 +"		sta	$2B8C	;Column
+0A04 : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0A07 : AF 		" "		xra	a	;reset CRT handler
+0A08 : 32 88 2B 	"2 +"		sta	$2B88
+0A0B : 21 87 09 	"!  "		lxi	h,$0987
+0A0E : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0A11 : 3A 8C 2B 	": +"		lda	$2B8C	;Column
+0A14 : 32 85 2B 	"2 +"		sta	$2B85
+0A17 : 06 FF 		"  "		mvi	b,$FF
+0A19				L0A19:
+0A19 : 04 		" "		inr	b
+0A1A : CD 59 0A 	" Y "		call	L0A59
+0A1D : F2 52 0A 	" R "		jp	L0A52
+0A20 : 57 		"W"		mov	d,a
+0A21 : 3A 85 2B 	": +"		lda	$2B85
+0A24 : BA 		" "		cmp	d
+0A25 : DA 32 0A 	" 2 "		jc	L0A32
+0A28 : CA 52 0A 	" R "		jz	L0A52
+0A2B : 78 		"x"		mov	a,b
+0A2C : FE 13 		"  "		cpi	$13
+0A2E : C8 		" "		rz
+0A2F : C3 19 0A 	"   "		jmp	L0A19
+				;
+0A32				L0A32:
+0A32 : 78 		"x"		mov	a,b
+0A33 : FE 13 		"  "		cpi	$13
+0A35 : D2 52 0A 	" R "		jnc	L0A52
+0A38 : 7E 		"~"		mov	a,m
+0A39 : 32 86 2B 	"2 +"		sta	$2B86
+0A3C : 23 		"#"		inx	h
+0A3D : 7E 		"~"		mov	a,m
+0A3E : 32 87 2B 	"2 +"		sta	$2B87
+0A41 : 2B 		"+"		dcx	h
+0A42 : CD 52 0A 	" R "		call	L0A52
+0A45 : 3A 86 2B 	": +"		lda	$2B86
+0A48 : 32 85 2B 	"2 +"		sta	$2B85
+0A4B : 3A 87 2B 	": +"		lda	$2B87
+0A4E : 4F 		"O"		mov	c,a
+0A4F : C3 19 0A 	"   "		jmp	L0A19
+				;
+0A52				L0A52:
+0A52 : 3A 85 2B 	": +"		lda	$2B85
+0A55 : 77 		"w"		mov	m,a
+0A56 : 23 		"#"		inx	h
+0A57 : 71 		"q"		mov	m,c
+0A58 : C9 		" "		ret
+				;
+0A59				L0A59:
+0A59 : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0A5C				L0A5C:
+0A5C : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0A5F : 78 		"x"		mov	a,b
+0A60 : 87 		" "		add	a
+0A61 : C6 50 		" P"		adi	$50
+0A63 : 16 00 		"  "		mvi	d,$00
+0A65 : 5F 		"_"		mov	e,a
+0A66 : 19 		" "		dad	d
+0A67 : 7E 		"~"		mov	a,m
+0A68 : FE 50 		" P"		cpi	$50
+0A6A : C9 		" "		ret
+				;
+0A6B : 2A 8A 2B 	"* +"		lhld	$2B8A	;Display addr
+0A6E : 71 		"q"		mov	m,c
+
+0A6F				L0A6F:
+0A6F : AF 		" "		xra	a
+0A70 : 32 88 2B 	"2 +"		sta	$2B88	
+0A73 : 21 87 09 	"!  "		lxi	h,$0987
+0A76 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0A79 : C9 		" "		ret
+				;
+0A7A : 21 		"!"		db	$21
+				;
+0A7B : 85 		" "		add	l
+0A7C				L0A7C:
+0A7C : 0A 		" "		ldax	b
+0A7D : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0A80 : 79 		"y"		mov	a,c
+0A81 : 32 85 2B 	"2 +"		sta	$2B85
+0A84 : C9 		" "		ret
+				;
+0A85 : C5 		" "		push	b
+0A86 : CD 11 0B 	"   "		call	L0B11
+0A89 : C1 		" "		pop	b
+0A8A : 21 87 09 	"!  "		lxi	h,$0987
+0A8D : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0A90 : AF 		" "		xra	a
+0A91 : 32 88 2B 	"2 +"		sta	$2B88
+0A94 : 3A 85 2B 	": +"		lda	$2B85
+0A97 : 67 		"g"		mov	h,a
+0A98 : 69 		"i"		mov	l,c
+0A99 : 11 00 20 	"   "		lxi	d,$2000
+0A9C : 01 50 18 	" P "		lxi	b,$1850
+0A9F				L0A9F:
+0A9F : C5 		" "		push	b
+0AA0 : E5 		" "		push	h
+0AA1 : D5 		" "		push	d
+0AA2 : CD B9 05 	"   "		call	L05B9		;Write CPU RAM (C bytes to CPU ram from DE to HL)
+0AA5 : E1 		" "		pop	h
+0AA6 : D1 		" "		pop	d
+0AA7 : 01 78 00 	" x "		lxi	b,$0078
+0AAA : 09 		" "		dad	b
+0AAB : EB 		" "		xchg
+0AAC : 01 50 00 	" P "		lxi	b,$0050
+0AAF : 09 		" "		dad	b
+0AB0 : C1 		" "		pop	b
+0AB1 : 05 		" "		dcr	b
+0AB2 : C2 9F 0A 	"   "		jnz	L0A9F
+0AB5 : 1E 06 		"  "		mvi	e,$06
+0AB7 : 3A 78 2B 	":x+"		lda	$2B78		;
+0ABA : 32 79 2B 	"2y+"		sta	$2B79		;key buffer pos
+0ABD : C3 91 0D 	"   "		jmp	L0D91
+				;
+0AC0 : 11 0B 1B 	"   "		lxi	d,$1B0B
+0AC3 : 0B 		" "		dcx	b
+0AC4 : 6E 		"n"		mov	l,m
+0AC5 : 0B 		" "		dcx	b
+0AC6 : 53 		"S"		mov	d,e
+0AC7 : 0B 		" "		dcx	b
+0AC8 : 44 		"D"		mov	b,h
+0AC9 : 0B 		" "		dcx	b
+0ACA : 62 		"b"		mov	h,d
+0ACB : 0B 		" "		dcx	b
+0ACC : 84 		" "		add	h
+0ACD : 0B 		" "		dcx	b
+0ACE : 7D 		"}"		mov	a,l
+0ACF : 0B 		" "		dcx	b
+0AD0 : E9 		" "		pchl			;INFO: index jump
+				;
+0AD1 : 09 		" "		dad	b
+0AD2 : 87 		" "		add	a
+0AD3 : 0B 		" "		dcx	b
+0AD4 : 9F 		" "		sbb	a
+0AD5 : 0B 		" "		dcx	b
+0AD6 : AB 		" "		xra	e
+0AD7 : 0B 		" "		dcx	b
+0AD8 : C2 0B CD 	"   "		jnz	LCD0B
+0ADB : 0B 		" "		dcx	b
+0ADC : 09 		" "		dad	b
+0ADD : 0C 		" "		inr	c
+0ADE : 27 		"'"		daa
+0ADF : 0C 		" "		inr	c
+0AE0 : 2D 		"-"		dcr	l
+0AE1 : 0C 		" "		inr	c
+0AE2 : 33 		"3"		inx	sp
+0AE3 : 0C 		" "		inr	c
+0AE4 : 45 		"E"		mov	b,l
+0AE5 : 0C 		" "		inr	c
+0AE6 : 66 		"f"		mov	h,m
+0AE7 : 0C 		" "		inr	c
+0AE8 : 6C 		"l"		mov	l,h
+0AE9 : 0C 		" "		inr	c
+0AEA : 7C 		"|"		mov	a,h
+0AEB : 0C 		" "		inr	c
+0AEC : E9 		" "		pchl			;INFO: index jump
+				;
+0AED : 09 		" "		dad	b
+0AEE : E9 		" "		pchl			;INFO: index jump
+				;
+0AEF : 09 		" "		dad	b
+0AF0 : 88 		" "		adc	b
+0AF1 : 0C 		" "		inr	c
+0AF2 : 8E 		" "		adc	m
+0AF3 : 0C 		" "		inr	c
+0AF4 : 94 		" "		sub	h
+0AF5 : 0C 		" "		inr	c
+0AF6 : D5 		" "		push	d
+0AF7 : 0C 		" "		inr	c
+0AF8				L0AF8:
+0AF8 : 3E FF 		"> "		mvi	a,$FF		;Signal special handler?
+0AFA : 32 88 2B 	"2 +"		sta	$2B88
+0AFD : 21 6B 0A 	"!k "		lxi	h,$0A6B		;
+0B00 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0B03 : C9 		" "		ret
+
+				;-------------------------------
+				;Bell character 
+				;-------------------------------
+				
+0B04				L0B04:
+0B04 : 3E 19 		"> "		mvi	a,$19		;buzz for 25 frames 
+0B06 : 32 40 2B 	"2@+"		sta	$2B40		;BUZZER
+0B09 : C9 		" "		ret			;
+
+				;-------------------------------
+				;Set CRT ESCape mode 
+				;-------------------------------				
+				
+0B0A				L0B0A:
+0B0A : 21 BE 09 	"!  "		lxi	h,$09BE		;set ESC mode
+0B0D : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0B10 : C9 		" "		ret
+				;
+0B11				L0B11:
+0B11 : CD B3 0D 	"   "		call	L0DB3
+0B14 : FB 		" "		ei
+0B15 : CD A0 0D 	"   "		call	L0DA0
+0B18 : C3 D7 0D 	"   "		jmp	L0DD7
+				;
+0B1B				L0B1B:
+0B1B : 21 8C 2B 	"! +"		lxi	h,$2B8C	;Column
+0B1E : 7E 		"~"		mov	a,m
+0B1F : E6 F8 		"  "		ani	$F8
+0B21 : 47 		"G"		mov	b,a
+0B22 : 79 		"y"		mov	a,c
+0B23 : FE 40 		" @"		cpi	$40
+0B25 : CA 34 0B 	" 4 "		jz	L0B34
+0B28 : 78 		"x"		mov	a,b
+0B29 : C6 08 		"  "		adi	$08
+0B2B : FE 50 		" P"		cpi	$50
+0B2D : CA 24 0D 	" $ "		jz	L0D24
+0B30				L0B30:
+0B30 : 77 		"w"		mov	m,a
+0B31 : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0B34				L0B34:
+0B34 : 7E 		"~"		mov	a,m
+0B35 : FE 00 		"  "		cpi	$00
+0B37 : CA 8E 0B 	"   "		jz	L0B8E	;get display address
+0B3A : 78 		"x"		mov	a,b
+0B3B : BE 		" "		cmp	m
+0B3C : C2 30 0B 	" 0 "		jnz	L0B30
+0B3F : D6 08 		"  "		sui	$08
+0B41 : C3 30 0B 	" 0 "		jmp	L0B30
+				;
+0B44				L0B44:
+0B44 : 21 8C 2B 	"! +"		lxi	h,$2B8C	;Column
+0B47 : 34 		"4"		inr	m
+0B48 : 7E 		"~"		mov	a,m
+0B49 : FE 50 		" P"		cpi	$50
+0B4B : CA 51 0B 	" Q "		jz	L0B51
+0B4E : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0B51				L0B51:
+0B51 : 36 00 		"6 "		mvi	m,$00
+0B53 : 21 8D 2B 	"! +"		lxi	h,$2B8D	;Line
+0B56 : 34 		"4"		inr	m
+0B57 : 7E 		"~"		mov	a,m
+0B58 : FE 18 		"  "		cpi	$18
+0B5A : C2 8E 0B 	"   "		jnz	L0B8E	;get display address
+0B5D : 36 00 		"6 "		mvi	m,$00
+0B5F : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0B62				L0B62:
+0B62 : 21 8C 2B 	"! +"		lxi	h,$2B8C	;Column
+0B65 : 35 		"5"		dcr	m
+0B66 : 7E 		"~"		mov	a,m
+0B67 : FE FF 		"  "		cpi	$FF
+0B69 : C2 8E 0B 	"   "		jnz	L0B8E	;get display address
+0B6C : 36 4F 		"6O"		mvi	m,$4F
+0B6E : 21 8D 2B 	"! +"		lxi	h,$2B8D	;Line
+0B71 : 35 		"5"		dcr	m
+0B72 : 7E 		"~"		mov	a,m
+0B73 : FE FF 		"  "		cpi	$FF
+0B75 : C2 8E 0B 	"   "		jnz	L0B8E	;get display address
+0B78 : 36 17 		"6 "		mvi	m,$17
+0B7A : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0B7D : 21 DD 09 	"!  "		lxi	h,$09DD
+0B80 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0B83 : C9 		" "		ret
+				;----------------
+				
+0B84				L0B84:
+0B84 : CD 6F 0D 	" o "		call	L0D6F
+0B87				L0B87:
+0B87 : AF 		" "		xra	a	;reset
+0B88 : 32 8C 2B 	"2 +"		sta	$2B8C	;Column
+0B8B				L0B8B:
+0B8B : 32 8D 2B 	"2 +"		sta	$2B8D	;Line
+
+				;get display address
+				
+0B8E				L0B8E:
+0B8E : 3A 8C 2B 	": +"		lda	$2B8C	;Column
+0B91 : 4F 		"O"		mov	c,a
+0B92 : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0B95 : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0B98 : 06 00 		"  "		mvi	b,$00
+0B9A : 09 		" "		dad	b
+0B9B : 22 8A 2B 	"" +"		shld	$2B8A	;Display addr
+0B9E : C9 		" "		ret
+
+				;-------------------------------
+				
+0B9F : 3E FF 		"> "		mvi	a,$FF		;Signal special
+0BA1 : 32 88 2B 	"2 +"		sta	$2B88		;CRT handler
+0BA4 : 21 7A 0A 	"!z "		lxi	h,$0A7A		;
+0BA7 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0BAA : C9 		" "		ret
+
+				;--------------------------------
+				;Clear Display from cursor to end of display 
+				;--------------------------------
+				
+0BAB : CD C2 0B 	"   "		call	L0BC2	;Clear Line from Cursor
+0BAE : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0BB1				L0BB1:
+0BB1 : 3C 		"<"		inr	a	;Line down
+0BB2 : FE 18 		"  "		cpi	$18	;MAx line
+0BB4 : C8 		" "		rz		;ret no more lines to clear
+
+0BB5 : 47 		"G"		mov	b,a	;save
+0BB6 : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0BB9 : 3E 50 		">P"		mvi	a,$50	;80 chars on line
+0BBB : CD C5 0B 	"   "		call	L0BC5	;Print spaces
+0BBE : 78 		"x"		mov	a,b
+0BBF : C3 B1 0B 	"   "		jmp	L0BB1	;loop
+
+				;-------------------------------
+				;Clear Line from Cursor
+				;-------------------------------
+				
+0BC2				L0BC2:
+0BC2 : CD 87 0D 	"   "		call	L0D87	;Get chars left on line
+
+				;-------------------------------
+				;print A spaces
+				;-------------------------------
+				
+0BC5				L0BC5:
+0BC5 : 36 20 		"6 "		mvi	m,$20	;SPACE
+0BC7 : 23 		"#"		inx	h
+0BC8 : 3D 		"="		dcr	a
+0BC9 : C2 C5 0B 	"   "		jnz	L0BC5
+0BCC : C9 		" "		ret
+				;
+0BCD : CD 35 0D 	" 5 "		call	L0D35
+0BD0 : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0BD3 : FE 17 		"  "		cpi	$17
+0BD5 : CA EF 0B 	"   "		jz	L0BEF
+0BD8 : 3E 16 		"> "		mvi	a,$16
+0BDA				L0BDA:
+0BDA : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0BDD : 5D 		"]"		mov	e,l
+0BDE : 54 		"T"		mov	d,h
+0BDF : 01 78 00 	" x "		lxi	b,$0078
+0BE2 : 09 		" "		dad	b
+0BE3 : EB 		" "		xchg
+0BE4 : CD 7C 0D 	" | "		call	L0D7C
+0BE7 : 3D 		"="		dcr	a
+0BE8 : 21 8D 2B 	"! +"		lxi	h,$2B8D	;Line
+0BEB : BE 		" "		cmp	m
+0BEC : F2 DA 0B 	"   "		jp	L0BDA
+0BEF				L0BEF:
+0BEF : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0BF2				L0BF2:
+0BF2 : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0BF5 : 0E 50 		" P"		mvi	c,$50
+0BF7 : 06 20 		"  "		mvi	b,$20
+0BF9 : CD AC 0D 	"   "		call	L0DAC
+0BFC : 0E 14 		"  "		mvi	c,$14
+0BFE				L0BFE:
+0BFE : 36 50 		"6P"		mvi	m,$50
+0C00 : 23 		"#"		inx	h
+0C01 : 36 00 		"6 "		mvi	m,$00
+0C03 : 23 		"#"		inx	h
+0C04 : 0D 		" "		dcr	c
+0C05 : C2 FE 0B 	"   "		jnz	L0BFE
+0C08 : C9 		" "		ret
+				;
+0C09 : CD 35 0D 	" 5 "		call	L0D35
+0C0C : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0C0F				L0C0F:
+0C0F : 47 		"G"		mov	b,a
+0C10				L0C10:
+0C10 : FE 17 		"  "		cpi	$17
+0C12 : CA F2 0B 	"   "		jz	L0BF2
+0C15 : 0E 78 		" x"		mvi	c,$78
+0C17 : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0C1A : EB 		" "		xchg
+0C1B : 3C 		"<"		inr	a
+0C1C : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0C1F : 0E 78 		" x"		mvi	c,$78
+0C21 : CD 7C 0D 	" | "		call	L0D7C
+0C24 : C3 10 0C 	"   "		jmp	L0C10
+
+				;
+0C27 : 3E 80 		"> "		mvi	a,$80	;Cursor OFF ?
+0C29 : 32 84 2B 	"2 +"		sta	$2B84	;UPD3301 CRT cursor command ?
+0C2C : C9 		" "		ret
+				;
+0C2D				L0C2D:
+0C2D : 3E 81 		"> "		mvi	a,$81	;Cursor ON  ?
+0C2F : 32 84 2B 	"2 +"		sta	$2B84	;UPD3301 CRT cursor command ?
+0C32 : C9 		" "		ret
+				;
+0C33 : CD 87 0D 	"   "		call	L0D87	;Get chars left on line
+0C36 : 54 		"T"		mov	d,h
+0C37 : 5D 		"]"		mov	e,l
+0C38 : 23 		"#"		inx	h
+0C39 : 3D 		"="		dcr	a
+0C3A : CA 41 0C 	" A "		jz	L0C41
+0C3D : 4F 		"O"		mov	c,a
+0C3E : CD 7C 0D 	" | "		call	L0D7C
+0C41				L0C41:
+0C41 : 2B 		"+"		dcx	h
+0C42 : 36 20 		"6 "		mvi	m,$20
+0C44 : C9 		" "		ret
+				;
+0C45 : 21 8C 2B 	"! +"		lxi	h,$2B8C	;Column
+0C48 : 3E 4F 		">O"		mvi	a,$4F
+0C4A : 96 		" "		sub	m
+0C4B : CA 60 0C 	" ` "		jz	L0C60
+0C4E : 4F 		"O"		mov	c,a
+0C4F : 06 00 		"  "		mvi	b,$00
+0C51 : 2A 8A 2B 	"* +"		lhld	$2B8A	;Display addr
+0C54 : 09 		" "		dad	b
+0C55 : 54 		"T"		mov	d,h
+0C56 : 5D 		"]"		mov	e,l
+0C57 : 2B 		"+"		dcx	h
+0C58				L0C58:
+0C58 : 7E 		"~"		mov	a,m
+0C59 : 12 		" "		stax	d
+0C5A : 2B 		"+"		dcx	h
+0C5B : 1B 		" "		dcx	d
+0C5C : 0D 		" "		dcr	c
+0C5D : C2 58 0C 	" X "		jnz	L0C58
+0C60				L0C60:
+0C60 : 2A 8A 2B 	"* +"		lhld	$2B8A	;Display addr
+0C63 : 36 20 		"6 "		mvi	m,$20
+0C65 : C9 		" "		ret
+				;
+0C66 : 3E FF 		"> "		mvi	a,$FF		;infinite duration
+0C68 : 32 40 2B 	"2@+"		sta	$2B40		;BUZZER
+0C6B : C9 		" "		ret
+				;
+0C6C : 2A 8A 2B 	"* +"		lhld	$2B8A		;Display addr
+0C6F : 5E 		"^"		mov	e,m		;get char
+0C70 : 3A 78 2B 	":x+"		lda	$2B78		;
+0C73 : 32 79 2B 	"2y+"		sta	$2B79		;key buffer pos
+0C76 : CD 91 0D 	"   "		call	L0D91
+0C79 : C3 44 0B 	" D "		jmp	L0B44
+				;
+0C7C : 3E FF 		"> "		mvi	a,$FF
+0C7E : 32 88 2B 	"2 +"		sta	$2B88
+0C81 : 21 07 0A 	"!  "		lxi	h,$0A07
+0C84 : 22 82 2B 	"" +"		shld	$2B82		;CRT handler addr
+0C87 : C9 		" "		ret
+
+				;signal CPU board upper 32K RAM selected ?
+				
+0C88 : 3E 00 		"> "		mvi	a,$00
+0C8A : 32 89 2B 	"2 +"		sta	$2B89
+0C8D : C9 		" "		ret
+
+				;signal CPU board lower 32K RAM selected ?
+				
+0C8E				L0C8E:
+0C8E : 3E FF 		"> "		mvi	a,$FF
+0C90 : 32 89 2B 	"2 +"		sta	$2B89	;
+0C93 : C9 		" "		ret
+
+				;------------------------
+				
+0C94 : 3A 8C 2B 	": +"		lda	$2B8C	;Column
+0C97 : 4F 		"O"		mov	c,a
+0C98 : 06 00 		"  "		mvi	b,$00
+0C9A : CD 59 0A 	" Y "		call	L0A59
+0C9D				L0C9D:
+0C9D : 7E 		"~"		mov	a,m
+0C9E : FE 4F 		" O"		cpi	$4F
+0CA0 : F0 		" "		rp
+0CA1 : B9 		" "		cmp	c
+0CA2 : CA B0 0C 	"   "		jz	L0CB0
+0CA5 : F0 		" "		rp
+0CA6 : 04 		" "		inr	b
+0CA7 : 23 		"#"		inx	h
+0CA8 : 23 		"#"		inx	h
+0CA9 : 78 		"x"		mov	a,b
+0CAA : FE 14 		"  "		cpi	$14
+0CAC : C2 9D 0C 	"   "		jnz	L0C9D
+0CAF : C9 		" "		ret
+				;
+0CB0				L0CB0:
+0CB0 : 04 		" "		inr	b
+0CB1 : 78 		"x"		mov	a,b
+0CB2 : FE 14 		"  "		cpi	$14
+0CB4 : CA CF 0C 	"   "		jz	L0CCF
+0CB7 : 05 		" "		dcr	b
+0CB8 : 5D 		"]"		mov	e,l
+0CB9 : 54 		"T"		mov	d,h
+0CBA				L0CBA:
+0CBA : 23 		"#"		inx	h
+0CBB : 23 		"#"		inx	h
+0CBC : 7E 		"~"		mov	a,m
+0CBD : 12 		" "		stax	d
+0CBE : 4F 		"O"		mov	c,a
+0CBF : 23 		"#"		inx	h
+0CC0 : 13 		" "		inx	d
+0CC1 : 7E 		"~"		mov	a,m
+0CC2 : 12 		" "		stax	d
+0CC3 : 79 		"y"		mov	a,c
+0CC4 : FE 50 		" P"		cpi	$50
+0CC6 : C8 		" "		rz
+0CC7 : 04 		" "		inr	b
+0CC8 : 78 		"x"		mov	a,b
+0CC9 : FE 14 		"  "		cpi	$14
+0CCB : C2 BA 0C 	"   "		jnz	L0CBA
+0CCE : EB 		" "		xchg
+0CCF				L0CCF:
+0CCF : 36 50 		"6P"		mvi	m,$50
+0CD1 : 23 		"#"		inx	h
+0CD2 : 36 00 		"6 "		mvi	m,$00
+0CD4 : C9 		" "		ret
+				;
+0CD5 : CD C2 0B 	"   "		call	L0BC2	;Clear Line from Cursor
+0CD8 : 06 FF 		"  "		mvi	b,$FF
+0CDA : 11 8C 2B 	"  +"		lxi	d,$2B8C	;Column
+0CDD : 3A 8D 2B 	": +"		lda	$2B8D	;Line
+0CE0				L0CE0:
+0CE0 : 04 		" "		inr	b
+0CE1 : D5 		" "		push	d
+0CE2 : CD 5C 0A 	" \ "		call	L0A5C
+0CE5 : D1 		" "		pop	d
+0CE6 : F0 		" "		rp
+0CE7 : EB 		" "		xchg
+0CE8 : BE 		" "		cmp	m
+0CE9 : EB 		" "		xchg
+0CEA : F2 F4 0C 	"   "		jp	L0CF4
+0CED : 78 		"x"		mov	a,b
+0CEE : FE 13 		"  "		cpi	$13
+0CF0 : C8 		" "		rz
+0CF1 : C3 E0 0C 	"   "		jmp	L0CE0
+				;
+0CF4				L0CF4:
+0CF4 : 36 50 		"6P"		mvi	m,$50
+0CF6 : 23 		"#"		inx	h
+0CF7 : 36 00 		"6 "		mvi	m,$00
+0CF9 : 78 		"x"		mov	a,b
+0CFA : FE 13 		"  "		cpi	$13
+0CFC : C8 		" "		rz
+0CFD : 04 		" "		inr	b
+0CFE : 23 		"#"		inx	h
+0CFF : C3 F4 0C 	"   "		jmp	L0CF4
+				;
+0D02				L0D02:
+0D02 : F3 		" "		di
+0D03 : AF 		" "		xra	a
+0D04 : 32 79 2B 	"2y+"		sta	$2B79		;
+0D07 : 3E 04 		"> "		mvi	a,$04
+0D09 : 32 78 2B 	"2x+"		sta	$2B78
+0D0C : 21 70 2B 	"!p+"		lxi	h,$2B70		;keyboard buffer
+0D0F : 36 1B 		"6 "		mvi	m,$1B		;CTRL
+0D11 : 23 		"#"		inx	h
+0D12 : 36 46 		"6F"		mvi	m,$46		;F
+0D14 : 23 		"#"		inx	h
+0D15 : 3A 8D 2B 	": +"		lda	$2B8D		;Line
+0D18 : C6 20 		"  "		adi	$20		
+0D1A : 77 		"w"		mov	m,a		;
+0D1B : 23 		"#"		inx	h
+0D1C : 3A 8C 2B 	": +"		lda	$2B8C		;Column
+0D1F : C6 20 		"  "		adi	$20
+0D21 : 77 		"w"		mov	m,a		;
+0D22 : FB 		" "		ei
+0D23 : C9 		" "		ret
+				;
+0D24				L0D24:
+0D24 : AF 		" "		xra	a
+0D25 : 32 8C 2B 	"2 +"		sta	$2B8C	;Column
+0D28 : 21 8D 2B 	"! +"		lxi	h,$2B8D	;Line
+0D2B : 34 		"4"		inr	m
+0D2C : 7E 		"~"		mov	a,m
+0D2D : FE 18 		"  "		cpi	$18
+0D2F : C2 8E 0B 	"   "		jnz	L0B8E	;get display address
+0D32 : C3 A6 09 	"   "		jmp	L09A6
+
+				;handle cariage return character
+				
+0D35				L0D35:
+0D35 : AF 		" "		xra	a	;Reset
+0D36 : 32 8C 2B 	"2 +"		sta	$2B8C	;Column?
+0D39 : C3 8E 0B 	"   "		jmp	L0B8E	;get display address	
+				;
+0D3C				L0D3C:
+0D3C : 21 8D 2B 	"! +"		lxi	h,$2B8D	;Line
+0D3F : 7E 		"~"		mov	a,m
+0D40 : FE 17 		"  "		cpi	$17
+0D42 : CA 49 0D 	" I "		jz	L0D49
+0D45 : 34 		"4"		inr	m
+0D46 : C3 8E 0B 	"   "		jmp	L0B8E	;get display address
+				;
+0D49				L0D49:
+0D49 : CD B8 09 	"   "		call	L09B8
+0D4C : CA 8B 0B 	"   "		jz	L0B8B
+0D4F : C3 B1 09 	"   "		jmp	L09B1
+
+				;-Get VRAM line address -
+				
+				;Entry: A = display line
+				
+				;Exit:  HL= VRAM address
+				
+0D52				L0D52:
+0D52 : F5 		" "		push	psw	
+0D53 : C5 		" "		push	b	
+0D54 : D5 		" "		push	d
+0D55 : 6F 		"o"		mov	l,a	;Line
+0D56 : 26 00 		"& "		mvi	h,$00
+0D58 : 29 		")"		dad	h	;2
+0D59 : 29 		")"		dad	h	;4
+0D5A : 29 		")"		dad	h	;8
+0D5B : 44 		"D"		mov	b,h	
+0D5C : 4D 		"M"		mov	c,l
+0D5D : 29 		")"		dad	h	;16
+0D5E : 29 		")"		dad	h	;32
+0D5F : 29 		")"		dad	h	;64
+0D60 : 29 		")"		dad	h	;128
+0D61 : 7D 		"}"		mov	a,l
+0D62 : 91 		" "		sub	c	
+0D63 : 6F 		"o"		mov	l,a	;128-8
+0D64 : 7C 		"|"		mov	a,h
+0D65 : 98 		" "		sbb	b
+0D66 : 67 		"g"		mov	h,a
+0D67 : 11 00 20 	"   "		lxi	d,$2000	;VRAM
+0D6A : 19 		" "		dad	d	;Add VRAM
+0D6B : D1 		" "		pop	d
+0D6C : C1 		" "		pop	b
+0D6D : F1 		" "		pop	psw
+0D6E : C9 		" "		ret
+				;
+0D6F				L0D6F:
+0D6F : CD B3 0D 	"   "		call	L0DB3
+0D72 : CD C6 0D 	"   "		call	L0DC6
+0D75 : FB 		" "		ei
+0D76 : CD A0 0D 	"   "		call	L0DA0
+0D79 : C3 D7 0D 	"   "		jmp	L0DD7
+				;
+0D7C				L0D7C:
+0D7C : F5 		" "		push	psw
+0D7D				L0D7D:
+0D7D : 7E 		"~"		mov	a,m
+0D7E : 12 		" "		stax	d
+0D7F : 23 		"#"		inx	h
+0D80 : 13 		" "		inx	d
+0D81 : 0D 		" "		dcr	c
+0D82 : C2 7D 0D 	" } "		jnz	L0D7D
+0D85 : F1 		" "		pop	psw
+0D86 : C9 		" "		ret
+
+				;---------------------------------
+				;Get chars left on line
+				;---------------------------------
+				
+0D87				L0D87:
+0D87 : 3E 50 		">P"		mvi	a,$50	;80 chars per line
+0D89 : 21 8C 2B 	"! +"		lxi	h,$2B8C	;Column
+0D8C : 96 		" "		sub	m	;
+0D8D : 2A 8A 2B 	"* +"		lhld	$2B8A	;Display addr
+0D90 : C9 		" "		ret
+
+				;------------------------------------
+				;Store key E at pos A
+				;------------------------------------
+				
+0D91				L0D91:
+0D91 : 21 70 2B 	"!p+"		lxi	h,$2B70		;keyboard buffer
+0D94 : 06 00 		"  "		mvi	b,$00
+0D96 : 4F 		"O"		mov	c,a		;buf pos
+0D97 : 09 		" "		dad	b
+0D98 : 73 		"s"		mov	m,e		;store key
+0D99 : 3C 		"<"		inr	a		
+0D9A : E6 07 		"  "		ani	$07		
+0D9C : 32 78 2B 	"2x+"		sta	$2B78		;next pos
+0D9F : C9 		" "		ret
+
+				;--------------------------------
+				
+0DA0				L0DA0:
+0DA0 : 06 32 		" 2"		mvi	b,$32
+0DA2				L0DA2:
+0DA2 : AF 		" "		xra	a
+0DA3				L0DA3:
+0DA3 : 3C 		"<"		inr	a
+0DA4 : C2 A3 0D 	"   "		jnz	L0DA3
+0DA7 : 05 		" "		dcr	b
+0DA8 : C2 A2 0D 	"   "		jnz	L0DA2
+0DAB : C9 		" "		ret
+				;
+0DAC				L0DAC:
+0DAC : 70 		"p"		mov	m,b
+0DAD : 23 		"#"		inx	h
+0DAE : 0D 		" "		dcr	c
+0DAF : C2 AC 0D 	"   "		jnz	L0DAC
+0DB2 : C9 		" "		ret
+				;
+0DB3				L0DB3:
+0DB3 : 3E 17 		"> "		mvi	a,$17
+0DB5 : 06 00 		"  "		mvi	b,$00
+0DB7				L0DB7:
+0DB7 : 0E 28 		" ("		mvi	c,$28
+0DB9 : F5 		" "		push	psw
+0DBA : CD 5C 0A 	" \ "		call	L0A5C
+0DBD : F1 		" "		pop	psw
+0DBE : CD AC 0D 	"   "		call	L0DAC
+0DC1 : 3D 		"="		dcr	a
+0DC2 : F2 B7 0D 	"   "		jp	L0DB7
+0DC5 : C9 		" "		ret
+				;
+0DC6				L0DC6:
+0DC6 : 3E 17 		"> "		mvi	a,$17
+0DC8 : 06 20 		"  "		mvi	b,$20
+0DCA				L0DCA:
+0DCA : 0E 50 		" P"		mvi	c,$50
+0DCC : CD 52 0D 	" R "		call	L0D52	;Get VRAM line address
+0DCF : CD AC 0D 	"   "		call	L0DAC
+0DD2 : 3D 		"="		dcr	a
+0DD3 : F2 CA 0D 	"   "		jp	L0DCA
+0DD6 : C9 		" "		ret
+				;
+0DD7				L0DD7:
+0DD7 : 3E 17 		"> "		mvi	a,$17
+0DD9 : 06 00 		"  "		mvi	b,$00
+0DDB				L0DDB:
+0DDB : 0E 14 		"  "		mvi	c,$14
+0DDD : F5 		" "		push	psw
+0DDE : CD 5C 0A 	" \ "		call	L0A5C
+0DE1 : F1 		" "		pop	psw
+0DE2				L0DE2:
+0DE2 : 36 50 		"6P"		mvi	m,$50
+0DE4 : 23 		"#"		inx	h
+0DE5 : 23 		"#"		inx	h
+0DE6 : 0D 		" "		dcr	c
+0DE7 : C2 E2 0D 	"   "		jnz	L0DE2
+0DEA : 3D 		"="		dcr	a
+0DEB : F2 DB 0D 	"   "		jp	L0DDB
+0DEE : C9 		" "		ret
+				;
+0DEF				L0DEF:
+0DEF : CD 8E 0C 	"   "		call	L0C8E
+0DF2 : CD 84 0B 	"   "		call	L0B84	;Reset cursor position ?
+0DF5 : CD 2D 0C 	" - "		call	L0C2D	;Cursor On ?
+0DF8 : C3 6F 0A 	" o "		jmp	L0A6F	;reset CRT handler
+
+				;----------------------------------
+				;Keyboard Table
+				;----------------------------------
+				
+				x0DFB:
+				
+0DFB : 64 		"d"		mov	h,h
+0DFC : 31 71 61 	"1qa"		lxi	sp,$6171
+0DFF : 7A 		"z"		mov	a,d
+0E00 : 09 		" "		dad	b
+0E01 : 48 		"H"		mov	c,b
+0E02 : 31 65 32 	"1e2"		lxi	sp,$3265
+0E05 : 77 		"w"		mov	m,a
+0E06 : 73 		"s"		mov	m,e
+0E07 : 78 		"x"		mov	a,b
+0E08 : 20 		" "		rim
+0E09 : 41 		"A"		mov	b,c
+0E0A : 32 66 33 	"2f3"		sta	$3366
+0E0D : 65 		"e"		mov	h,l
+0E0E : 64 		"d"		mov	h,h
+0E0F : 63 		"c"		mov	h,e
+0E10 : 40 		"@"		mov	b,b
+0E11 : 42 		"B"		mov	b,d
+0E12 : 33 		"3"		inx	sp
+0E13 : 67 		"g"		mov	h,a
+0E14 : 34 		"4"		inr	m
+0E15 : 72 		"r"		mov	m,d
+0E16 : 66 		"f"		mov	h,m
+0E17 : 76 		"v"		hlt
+0E18 : 52 		"R"		mov	d,d
+0E19 : 44 		"D"		mov	b,h
+0E1A : 34 		"4"		inr	m
+0E1B : 68 		"h"		mov	l,b
+0E1C : 35 		"5"		dcr	m
+0E1D : 74 		"t"		mov	m,h
+0E1E : 67 		"g"		mov	h,a
+0E1F : 62 		"b"		mov	h,d
+0E20 : 1B 		" "		dcx	d
+0E21 : 43 		"C"		mov	b,e
+0E22 : 35 		"5"		dcr	m
+0E23 : 69 		"i"		mov	l,c
+0E24 : 36 79 		"6y"		mvi	m,$79
+0E26 : 68 		"h"		mov	l,b
+0E27 : 6E 		"n"		mov	l,m
+0E28 : 82 		" "		add	d
+0E29 : 2B 		"+"		dcx	h
+0E2A : 36 6A 		"6j"		mvi	m,$6A
+0E2C : 37 		"7"		stc
+0E2D : 75 		"u"		mov	m,l
+0E2E : 6A 		"j"		mov	l,d
+0E2F : 6D 		"m"		mov	l,l
+0E30 : 72 		"r"		mov	m,d
+0E31 : 2D 		"-"		dcr	l
+0E32 : 37 		"7"		stc
+0E33 : 6B 		"k"		mov	l,e
+0E34 : 38 		"8"		db	$38
+0E35 : 69 		"i"		mov	l,c
+0E36 : 6B 		"k"		mov	l,e
+0E37 : 2C 		","		inr	l
+0E38 : 73 		"s"		mov	m,e
+0E39 : 2A 38 6C 	"*8l"		lhld	$6C38
+0E3C : 39 		"9"		dad	sp
+0E3D : 6F 		"o"		mov	l,a
+0E3E : 6C 		"l"		mov	l,h
+0E3F : 2E 74 		".t"		mvi	l,$74
+0E41 : 2F 		"/"		cma
+0E42 : 39 		"9"		dad	sp
+0E43 : 6D 		"m"		mov	l,l
+0E44 : 30 		"0"		sim
+0E45 : 70 		"p"		mov	m,b
+0E46 : 3B 		";"		dcx	sp
+0E47 : 2F 		"/"		cma
+0E48 : 75 		"u"		mov	m,l
+				;
+0E49 : 18 		" "		db	$18
+				;
+0E4A : 7F 		" "		mov	a,a
+0E4B : 6E 		"n"		mov	l,m
+0E4C : 2D 		"-"		dcr	l
+0E4D : 40 		"@"		mov	b,b
+0E4E : 3A FF 76 	": v"		lda	$76FF
+0E51 : 0D 		" "		dcr	c
+0E52 : FF 		" "		rst	7
+0E53 : 6F 		"o"		mov	l,a
+0E54 : 5E 		"^"		mov	e,m
+0E55 : 5B 		"["		mov	e,e
+0E56 : 5D 		"]"		mov	e,l
+0E57 : FF 		" "		rst	7
+0E58 : 77 		"w"		mov	m,a
+0E59 : 30 		"0"		sim
+0E5A : FF 		" "		rst	7
+0E5B : 70 		"p"		mov	m,b
+0E5C : 5C 		"\"		mov	e,h
+0E5D : 0A 		" "		ldax	b
+0E5E : 0D 		" "		dcr	c
+0E5F : FF 		" "		rst	7
+0E60 : 78 		"x"		mov	a,b
+0E61 : 83 		" "		add	e
+0E62 : FF 		" "		rst	7
+0E63 : 71 		"q"		mov	m,c
+0E64 : 5F 		"_"		mov	e,a
+0E65 : FF 		" "		rst	7
+0E66 : FF 		" "		rst	7
+0E67 : FF 		" "		rst	7
+0E68 : 79 		"y"		mov	a,c
+0E69 : 2E FF 		". "		mvi	l,$FF
+0E6B : 96 		" "		sub	m
+0E6C : 21 51 41 	"!QA"		lxi	h,$4151
+0E6F : 5A 		"Z"		mov	e,d
+0E70 : 09 		" "		dad	b
+0E71 : 48 		"H"		mov	c,b
+0E72 : 31 97 22 	"1 ""		lxi	sp,$2297
+0E75 : 57 		"W"		mov	d,a
+0E76 : 53 		"S"		mov	d,e
+0E77 : 58 		"X"		mov	e,b
+0E78 : 20 		" "		rim
+0E79 : 41 		"A"		mov	b,c
+0E7A : 32 98 23 	"2 #"		sta	$2398
+0E7D : 45 		"E"		mov	b,l
+0E7E : 44 		"D"		mov	b,h
+0E7F : 43 		"C"		mov	b,e
+0E80 : 40 		"@"		mov	b,b
+0E81 : 42 		"B"		mov	b,d
+0E82 : 33 		"3"		inx	sp
+0E83 : 99 		" "		sbb	c
+0E84 : 24 		"$"		inr	h
+0E85 : 52 		"R"		mov	d,d
+0E86 : 46 		"F"		mov	b,m
+0E87 : 56 		"V"		mov	d,m
+0E88 : 52 		"R"		mov	d,d
+0E89 : 44 		"D"		mov	b,h
+0E8A : 34 		"4"		inr	m
+0E8B : 9A 		" "		sbb	d
+0E8C : 25 		"%"		dcr	h
+0E8D : 54 		"T"		mov	d,h
+0E8E : 47 		"G"		mov	b,a
+0E8F : 42 		"B"		mov	b,d
+0E90 : 1B 		" "		dcx	d
+0E91 : 43 		"C"		mov	b,e
+0E92 : 35 		"5"		dcr	m
+0E93 : 9B 		" "		sbb	e
+0E94 : 26 59 		"&Y"		mvi	h,$59
+0E96 : 48 		"H"		mov	c,b
+0E97 : 4E 		"N"		mov	c,m
+0E98 : 82 		" "		add	d
+0E99 : 2B 		"+"		dcx	h
+0E9A : 36 9C 		"6 "		mvi	m,$9C
+0E9C : 27 		"'"		daa
+0E9D : 55 		"U"		mov	d,l
+0E9E : 4A 		"J"		mov	c,d
+0E9F : 4D 		"M"		mov	c,l
+0EA0 : E4 2D 37 	" -7"		cpo	L372D
+0EA3 : 9D 		" "		sbb	l
+				;
+0EA4 : 28 		"("		db	$28
+				;
+0EA5 : 49 		"I"		mov	c,c
+0EA6 : 4B 		"K"		mov	c,e
+0EA7 : 3C 		"<"		inr	a
+0EA8 : E5 		" "		push	h
+0EA9 : 2A 38 9E 	"*8 "		lhld	$9E38
+0EAC : 29 		")"		dad	h
+0EAD : 4F 		"O"		mov	c,a
+0EAE : 4C 		"L"		mov	c,h
+0EAF : 3E E6 		"> "		mvi	a,$E6
+0EB1 : 2F 		"/"		cma
+0EB2 : 39 		"9"		dad	sp
+0EB3 : 9F 		" "		sbb	a
+0EB4 : FF 		" "		rst	7
+0EB5 : 50 		"P"		mov	d,b
+0EB6 : 2B 		"+"		dcx	h
+0EB7 : 3F 		"?"		cmc
+0EB8 : E7 		" "		rst	4
+				;
+0EB9 : 18 		" "		db	$18
+				;
+0EBA : 51 		"Q"		mov	d,c
+0EBB : E0 		" "		rpo
+0EBC : 3D 		"="		dcr	a
+0EBD : 60 		"`"		mov	h,b
+0EBE : 2A FF E8 	"*  "		lhld	$E8FF
+0EC1 : 0D 		" "		dcr	c
+0EC2 : FF 		" "		rst	7
+0EC3 : E1 		" "		pop	h
+0EC4 : 7E 		"~"		mov	a,m
+0EC5 : 7B 		"{"		mov	a,e
+0EC6 : 7D 		"}"		mov	a,l
+0EC7 : FF 		" "		rst	7
+0EC8 : E9 		" "		pchl			;INFO: index jump
+				;
+0EC9 : 30 		"0"		sim
+0ECA : FF 		" "		rst	7
+0ECB : E2 7C 0A 	" | "		jpo	L0A7C
+0ECE : 0D 		" "		dcr	c
+0ECF : FF 		" "		rst	7
+0ED0 : EA 83 FF 	"   "		jpe	LFF83
+0ED3 : E3 		" "		xthl
+				;
+0ED4 : 08 		" "		db	$08
+				;
+0ED5 : FF 		" "		rst	7
+0ED6 : FF 		" "		rst	7
+0ED7 : FF 		" "		rst	7
+0ED8 : FF 		" "		rst	7
+0ED9 : 2E FF 		". "		mvi	l,$FF
+0EDB : 41 		"A"		mov	b,c
+0EDC : 41 		"A"		mov	b,c
+0EDD : 61 		"a"		mov	h,c
+0EDE : 61 		"a"		mov	h,c
+0EDF : 41 		"A"		mov	b,c
+0EE0 : 21 21 21 	"!!!"		lxi	h,$2121
+0EE3 : 21 21 B1 	"!! "		lxi	h,$B121
+0EE6 : B1 		" "		ora	c
+0EE7 : F1 		" "		pop	psw
+0EE8 : BD 		" "		cmp	l
+0EE9 : 40 		"@"		mov	b,b
+0EEA : 40 		"@"		mov	b,b
+0EEB : 60 		"`"		mov	h,b
+0EEC : 60 		"`"		mov	h,b
+0EED : 40 		"@"		mov	b,b
+0EEE : 20 		" "		rim
+0EEF : 00 		" "		nop
+0EF0 : 00 		" "		nop
+0EF1 : 00 		" "		nop
+0EF2 : 82 		" "		add	d
+0EF3 : 90 		" "		sub	b
+0EF4 : 90 		" "		sub	b
+0EF5 : D0 		" "		rnc
+0EF6 : BC 		" "		cmp	h
+
+0EF7 : FF 		" "		rst	7
+0EF8 : FF 		" "		rst	7
+0EF9 : FF 		" "		rst	7
+0EFA : FF 		" "		rst	7
+0EFB : FF 		" "		rst	7
+0EFC : FF 		" "		rst	7
+0EFD : FF 		" "		rst	7
+0EFE : FF 		" "		rst	7
+0EFF : FF 		" "		rst	7
+0F00 : FF 		" "		rst	7
+0F01 : FF 		" "		rst	7
+0F02 : FF 		" "		rst	7
+0F03 : FF 		" "		rst	7
+0F04 : FF 		" "		rst	7
+0F05 : FF 		" "		rst	7
+0F06 : FF 		" "		rst	7
+0F07 : FF 		" "		rst	7
+0F08 : FF 		" "		rst	7
+0F09 : FF 		" "		rst	7
+0F0A : FF 		" "		rst	7
+0F0B : FF 		" "		rst	7
+0F0C : FF 		" "		rst	7
+0F0D : FF 		" "		rst	7
+0F0E : FF 		" "		rst	7
+0F0F : FF 		" "		rst	7
+0F10 : FF 		" "		rst	7
+0F11 : FF 		" "		rst	7
+0F12 : FF 		" "		rst	7
+0F13 : FF 		" "		rst	7
+0F14 : FF 		" "		rst	7
+0F15 : FF 		" "		rst	7
+0F16 : FF 		" "		rst	7
+0F17 : FF 		" "		rst	7
+0F18 : FF 		" "		rst	7
+0F19 : FF 		" "		rst	7
+0F1A : FF 		" "		rst	7
+0F1B : FF 		" "		rst	7
+0F1C : FF 		" "		rst	7
+0F1D : FF 		" "		rst	7
+0F1E : FF 		" "		rst	7
+0F1F : FF 		" "		rst	7
+0F20 : FF 		" "		rst	7
+0F21 : FF 		" "		rst	7
+0F22 : FF 		" "		rst	7
+0F23 : FF 		" "		rst	7
+0F24 : FF 		" "		rst	7
+0F25 : FF 		" "		rst	7
+0F26 : FF 		" "		rst	7
+0F27 : FF 		" "		rst	7
+0F28 : FF 		" "		rst	7
+0F29 : FF 		" "		rst	7
+0F2A : FF 		" "		rst	7
+0F2B : FF 		" "		rst	7
+0F2C : FF 		" "		rst	7
+0F2D : FF 		" "		rst	7
+0F2E : FF 		" "		rst	7
+0F2F : FF 		" "		rst	7
+0F30 : FF 		" "		rst	7
+0F31 : FF 		" "		rst	7
+0F32 : FF 		" "		rst	7
+0F33 : FF 		" "		rst	7
+0F34 : FF 		" "		rst	7
+0F35 : FF 		" "		rst	7
+0F36 : FF 		" "		rst	7
+0F37 : FF 		" "		rst	7
+0F38 : FF 		" "		rst	7
+0F39 : FF 		" "		rst	7
+0F3A : FF 		" "		rst	7
+0F3B : FF 		" "		rst	7
+0F3C : FF 		" "		rst	7
+0F3D : FF 		" "		rst	7
+0F3E : FF 		" "		rst	7
+0F3F : FF 		" "		rst	7
+0F40 : FF 		" "		rst	7
+0F41 : FF 		" "		rst	7
+0F42 : FF 		" "		rst	7
+0F43 : FF 		" "		rst	7
+0F44 : FF 		" "		rst	7
+0F45 : FF 		" "		rst	7
+0F46 : FF 		" "		rst	7
+0F47 : FF 		" "		rst	7
+0F48 : FF 		" "		rst	7
+0F49 : FF 		" "		rst	7
+0F4A : FF 		" "		rst	7
+0F4B : FF 		" "		rst	7
+0F4C : FF 		" "		rst	7
+0F4D : FF 		" "		rst	7
+0F4E : FF 		" "		rst	7
+0F4F : FF 		" "		rst	7
+0F50 : FF 		" "		rst	7
+0F51 : FF 		" "		rst	7
+0F52 : FF 		" "		rst	7
+0F53 : FF 		" "		rst	7
+0F54 : FF 		" "		rst	7
+0F55 : FF 		" "		rst	7
+0F56 : FF 		" "		rst	7
+0F57 : FF 		" "		rst	7
+0F58 : FF 		" "		rst	7
+0F59 : FF 		" "		rst	7
+0F5A : FF 		" "		rst	7
+0F5B : FF 		" "		rst	7
+0F5C : FF 		" "		rst	7
+0F5D : FF 		" "		rst	7
+0F5E : FF 		" "		rst	7
+0F5F : FF 		" "		rst	7
+0F60 : FF 		" "		rst	7
+0F61 : FF 		" "		rst	7
+0F62 : FF 		" "		rst	7
+0F63 : FF 		" "		rst	7
+0F64 : FF 		" "		rst	7
+0F65 : FF 		" "		rst	7
+0F66 : FF 		" "		rst	7
+0F67 : FF 		" "		rst	7
+0F68 : FF 		" "		rst	7
+0F69 : FF 		" "		rst	7
+0F6A : FF 		" "		rst	7
+0F6B : FF 		" "		rst	7
+0F6C : FF 		" "		rst	7
+0F6D : FF 		" "		rst	7
+0F6E : FF 		" "		rst	7
+0F6F : FF 		" "		rst	7
+0F70 : FF 		" "		rst	7
+0F71 : FF 		" "		rst	7
+0F72 : FF 		" "		rst	7
+0F73 : FF 		" "		rst	7
+0F74 : FF 		" "		rst	7
+0F75 : FF 		" "		rst	7
+0F76 : FF 		" "		rst	7
+0F77 : FF 		" "		rst	7
+0F78 : FF 		" "		rst	7
+0F79 : FF 		" "		rst	7
+0F7A : FF 		" "		rst	7
+0F7B : FF 		" "		rst	7
+0F7C : FF 		" "		rst	7
+0F7D : FF 		" "		rst	7
+0F7E : FF 		" "		rst	7
+0F7F : FF 		" "		rst	7
+0F80 : FF 		" "		rst	7
+0F81 : FF 		" "		rst	7
+0F82 : FF 		" "		rst	7
+0F83 : FF 		" "		rst	7
+0F84 : FF 		" "		rst	7
+0F85 : FF 		" "		rst	7
+0F86 : FF 		" "		rst	7
+0F87 : FF 		" "		rst	7
+0F88 : FF 		" "		rst	7
+0F89 : FF 		" "		rst	7
+0F8A : FF 		" "		rst	7
+0F8B : FF 		" "		rst	7
+0F8C : FF 		" "		rst	7
+0F8D : FF 		" "		rst	7
+0F8E : FF 		" "		rst	7
+0F8F : FF 		" "		rst	7
+0F90 : FF 		" "		rst	7
+0F91 : FF 		" "		rst	7
+0F92 : FF 		" "		rst	7
+0F93 : FF 		" "		rst	7
+0F94 : FF 		" "		rst	7
+0F95 : FF 		" "		rst	7
+0F96 : FF 		" "		rst	7
+0F97 : FF 		" "		rst	7
+0F98 : FF 		" "		rst	7
+0F99 : FF 		" "		rst	7
+0F9A : FF 		" "		rst	7
+0F9B : FF 		" "		rst	7
+0F9C : FF 		" "		rst	7
+0F9D : FF 		" "		rst	7
+0F9E : FF 		" "		rst	7
+0F9F : FF 		" "		rst	7
+0FA0 : FF 		" "		rst	7
+0FA1 : FF 		" "		rst	7
+0FA2 : FF 		" "		rst	7
+0FA3 : FF 		" "		rst	7
+0FA4 : FF 		" "		rst	7
+0FA5 : FF 		" "		rst	7
+0FA6 : FF 		" "		rst	7
+0FA7 : FF 		" "		rst	7
+0FA8 : FF 		" "		rst	7
+0FA9 : FF 		" "		rst	7
+0FAA : FF 		" "		rst	7
+0FAB : FF 		" "		rst	7
+0FAC : FF 		" "		rst	7
+0FAD : FF 		" "		rst	7
+0FAE : FF 		" "		rst	7
+0FAF : FF 		" "		rst	7
+0FB0 : FF 		" "		rst	7
+0FB1 : FF 		" "		rst	7
+0FB2 : FF 		" "		rst	7
+0FB3 : FF 		" "		rst	7
+0FB4 : FF 		" "		rst	7
+0FB5 : FF 		" "		rst	7
+0FB6 : FF 		" "		rst	7
+0FB7 : FF 		" "		rst	7
+0FB8 : FF 		" "		rst	7
+0FB9 : FF 		" "		rst	7
+0FBA : FF 		" "		rst	7
+0FBB : FF 		" "		rst	7
+0FBC : FF 		" "		rst	7
+0FBD : FF 		" "		rst	7
+0FBE : FF 		" "		rst	7
+0FBF : FF 		" "		rst	7
+0FC0 : FF 		" "		rst	7
+0FC1 : FF 		" "		rst	7
+0FC2 : FF 		" "		rst	7
+0FC3 : FF 		" "		rst	7
+0FC4 : FF 		" "		rst	7
+0FC5 : FF 		" "		rst	7
+0FC6 : FF 		" "		rst	7
+0FC7 : FF 		" "		rst	7
+0FC8 : FF 		" "		rst	7
+0FC9 : FF 		" "		rst	7
+0FCA : FF 		" "		rst	7
+0FCB : FF 		" "		rst	7
+0FCC : FF 		" "		rst	7
+0FCD : FF 		" "		rst	7
+0FCE : FF 		" "		rst	7
+0FCF : FF 		" "		rst	7
+0FD0 : FF 		" "		rst	7
+0FD1 : FF 		" "		rst	7
+0FD2 : FF 		" "		rst	7
+0FD3 : FF 		" "		rst	7
+0FD4 : FF 		" "		rst	7
+0FD5 : FF 		" "		rst	7
+0FD6 : FF 		" "		rst	7
+0FD7 : FF 		" "		rst	7
+0FD8 : FF 		" "		rst	7
+0FD9 : FF 		" "		rst	7
+0FDA : FF 		" "		rst	7
+0FDB : FF 		" "		rst	7
+0FDC : FF 		" "		rst	7
+0FDD : FF 		" "		rst	7
+0FDE : FF 		" "		rst	7
+0FDF : FF 		" "		rst	7
+0FE0 : FF 		" "		rst	7
+0FE1 : FF 		" "		rst	7
+0FE2 : FF 		" "		rst	7
+0FE3 : FF 		" "		rst	7
+0FE4 : FF 		" "		rst	7
+0FE5 : FF 		" "		rst	7
+0FE6 : FF 		" "		rst	7
+0FE7 : FF 		" "		rst	7
+0FE8 : FF 		" "		rst	7
+0FE9 : FF 		" "		rst	7
+0FEA : FF 		" "		rst	7
+0FEB : FF 		" "		rst	7
+0FEC : FF 		" "		rst	7
+0FED : FF 		" "		rst	7
+0FEE : FF 		" "		rst	7
+0FEF : FF 		" "		rst	7
+0FF0 : FF 		" "		rst	7
+0FF1 : FF 		" "		rst	7
+0FF2 : FF 		" "		rst	7
+0FF3 : FF 		" "		rst	7
+0FF4 : FF 		" "		rst	7
+0FF5 : FF 		" "		rst	7
+0FF6 : FF 		" "		rst	7
+0FF7 : FF 		" "		rst	7
+0FF8 : FF 		" "		rst	7
+0FF9 : FF 		" "		rst	7
+0FFA : FF 		" "		rst	7
+0FFB : FF 		" "		rst	7
+0FFC : FF 		" "		rst	7
+0FFD : FF 		" "		rst	7
+0FFE : FF 		" "		rst	7
+0FFF : C4 		" "		db	$C4
+
+;--------------------------------------------------------------
+Symbol table
+============
+
+Value	Type	Name
+-----	----	----
+0000	 04	L0000
+0043	 04	L0043
+0054	 04	L0054
+00A6	 04	L00A6	;Print error message
+00B0	 04	L00B0
+00BD	 04	L00BD
+00E9	 04	L00E9
+00F3	 04	L00F3
+00FE	 04	L00FE
+010F	 04	L010F
+0126	 04	L0126
+017D	 04	L017D		;I/O main loop
+019D	 04	L019D
+01F0	 04	L01F0
+01FE	 04	L01FE
+021A	 04	L021A
+0220	 04	L0220	;Set Buzzer
+022E	 04	L022E
+0232	 04	L0232
+0236	 04	L0236
+0252	 04	L0252
+0259	 04	L0259	;enable CPU board
+025F	 04	L025F
+026A	 04	L026A
+0289	 04	L0289
+02AA	 04	L02AA
+02C6	 04	L02C6
+02CB	 04	L02CB
+02D1	 04	L02D1
+02E6	 04	L02E6
+0301	 04	L0301
+0310	 04	L0310
+032C	 04	L032C
+0331	 04	L0331
+0337	 04	L0337
+034C	 04	L034C
+0367	 04	L0367
+03C6	 04	L03C6
+03D4	 04	L03D4		;Seek track ?
+03EC	 04	L03EC
+03FB	 04	L03FB
+0422	 04	L0422
+0433	 04	L0433
+0469	 04	L0469
+048D	 04	L048D		;Recalibrate head
+049F	 04	L049F
+04A0	 04	L04A0
+04B0	 04	L04B0
+04E4	 04	L04E4
+0515	 04	L0515
+053E	 04	L053E
+0551	 04	L0551		;Next Sector or Exit
+0563	 04	L0563
+057E	 04	L057E
+059C	 04	L059C
+05A6	 04	L05A6		;Set FDD DMA
+05B9	 04	L05B9		;Write CPU RAM (C bytes to CPU ram from DE to HL)
+05BC	 04	L05BC
+05CC	 04	L05CC		;Read CPU RAM (C bytes from CPU ram at HL to DE)
+05CF	 04	L05CF
+05DF	 04	L05DF		;Test Write Protect
+05ED	 04	L05ED	;Select CPU RAM
+05F7	 04	L05F7		;set CPU RAM bank
+0602	 04	L0602		;adjust CPU RAM bank (toggle)
+0611	 04	L0611
+0616	 04	L0616
+062D	 04	L062D
+063A	 04	L063A		disk error
+063F	 04	L063F
+0656	 04	L0656
+065B	 04	L065B
+0660	 04	L0660
+0665	 04	L0665
+066A	 04	L066A
+0678	 04	L0678		;Write FDC data
+0685	 04	L0685		;read FDC data
+0691	 04	L0691
+069A	 04	L069A
+06AA	 04	L06AA
+06B8	 04	L06B8
+06BD	 04	L06BD
+06C9	 04	L06C9	;Test RAM
+06D1	 04	L06D1
+06EC	 04	L06EC
+0705	 04	L0705
+071B	 04	L071B
+0741	 04	L0741
+0754	 04	L0754
+075A	 04	L075A
+0774	 04	L0774
+077A	 04	L077A
+079F	 04	L079F
+07A5	 04	L07A5
+07A7	 04	L07A7
+07AD	 04	L07AD
+07C1	 04	L07C1
+07E3	 04	L07E3
+07EB	 04	L07EB
+0825	 04	L0825
+084A	 04	L084A
+084C	 04	L084C
+084E	 04	L084E
+0853	 04	L0853
+085E	 04	L085E
+0863	 04	L0863
+0872	 04	L0872
+0877	 04	L0877	;Multiply HL = C * HL
+087D	 04	L087D
+0886	 04	L0886
+0888	 04	L0888
+08AE	 04	L08AE
+08B8	 04	L08B8
+08BD	 04	L08BD
+08C4	 04	L08C4
+08CD	 04	L08CD
+08D4	 04	L08D4
+08DA	 04	L08DA
+08ED	 04	L08ED
+08F1	 04	L08F1	;Key C to Buffer
+090C	 04	L090C
+0921	 04	L0921
+092B	 04	L092B
+0946	 04	L0946
+094B	 04	L094B
+0951	 04	L0951
+095F	 04	L095F
+0963	 04	L0963
+09A6	 04	L09A6
+09B1	 04	L09B1
+09B8	 04	L09B8
+0A19	 04	L0A19
+0A32	 04	L0A32
+0A52	 04	L0A52
+0A59	 04	L0A59
+0A5C	 04	L0A5C
+0A6F	 04	L0A6F
+0A7C	 04	L0A7C
+0A9F	 04	L0A9F
+0AF8	 04	L0AF8
+0B04	 04	L0B04
+0B0A	 04	L0B0A
+0B11	 04	L0B11
+0B1B	 04	L0B1B
+0B30	 04	L0B30
+0B34	 04	L0B34
+0B44	 04	L0B44
+0B51	 04	L0B51
+0B62	 04	L0B62
+0B84	 04	L0B84
+0B87	 04	L0B87
+0B8B	 04	L0B8B
+0B8E	 04	L0B8E	;get display address
+0BB1	 04	L0BB1
+0BC2	 04	L0BC2	;Clear Line from Cursor
+0BC5	 04	L0BC5
+0BDA	 04	L0BDA
+0BEF	 04	L0BEF
+0BF2	 04	L0BF2
+0BFE	 04	L0BFE
+0C0F	 04	L0C0F
+0C10	 04	L0C10
+0C2D	 04	L0C2D
+0C41	 04	L0C41
+0C58	 04	L0C58
+0C60	 04	L0C60
+0C8E	 04	L0C8E
+0C9D	 04	L0C9D
+0CB0	 04	L0CB0
+0CBA	 04	L0CBA
+0CCF	 04	L0CCF
+0CE0	 04	L0CE0
+0CF4	 04	L0CF4
+0D02	 04	L0D02
+0D24	 04	L0D24
+0D35	 04	L0D35
+0D3C	 04	L0D3C
+0D49	 04	L0D49
+0D52	 04	L0D52	;Get VRAM line address
+0D6F	 04	L0D6F
+0D7C	 04	L0D7C
+0D7D	 04	L0D7D
+0D87	 04	L0D87	;Get chars left on line
+0D91	 04	L0D91
+0DA0	 04	L0DA0
+0DA2	 04	L0DA2
+0DA3	 04	L0DA3
+0DAC	 04	L0DAC
+0DB3	 04	L0DB3
+0DB7	 04	L0DB7
+0DC6	 04	L0DC6
+0DCA	 04	L0DCA
+0DD7	 04	L0DD7
+0DDB	 04	L0DDB
+0DE2	 04	L0DE2
+0DEF	 04	L0DEF
+1000	 04	L1000
+1002	 04	L1002
+1403	 04	L1403
+372D	 04	L372D
+CD0B	 04	LCD0B
+FF83	 04	LFF83
+
+Number of symbols:			201
+
+;--------------------------------------------------------------

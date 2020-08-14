@@ -1,0 +1,43 @@
+ROM MA-4-2 Characterset ROM
+
+This 4K ROM contains the characterset with 256 characters.
+Each character is 8 pixels wide and 12 pixels high.
+Each Character is aligned at a multiple of 16 address.
+
+Character Code
+00-NU
+01-SH
+02-SX
+03-EX
+04-ET
+05-EQ
+06-AK
+07-BL
+08-BS
+09-HT
+0A-LF
+0B-VT
+0C-FF
+0D-CR
+0E-SO
+0F-SI
+10-DE
+11-D1
+12-D2
+13-D3
+14-D4
+15-NK
+16-SY
+17-EB
+18-CN
+19-EM
+1A-SB
+1B-EC
+1C-LEFT ARROW
+1D-RIGHT ARROW
+1E-UP ARROW
+1F-DOWN ARROW
+20-7E STANDARD ASCII CHARACTERS
+7F-?? SIMPLE GRAPHICS
+??-FF JAPANESE CHARACTERS
+

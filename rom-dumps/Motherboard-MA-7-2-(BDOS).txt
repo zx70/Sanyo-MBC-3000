@@ -1,0 +1,3631 @@
+				;
+				;	Disassembled by:
+				;		DASMx object code disassembler
+				;		(c) Copyright 1996-1998   Conquest Consultants
+				;		Version 1.20 (Apr  2 1998)
+				;
+				;	File:	D:\computers\Sanyo-MBC-3000\ROM dumps\Motherboard-MA-7-2-(BDOS).bin
+				;	Date:	Sun Dec 21 01:34:18 2008
+				;	CPU:	Intel 8085 (8085 family)
+				
+				;------------------------------------------------------
+				; MBC-3000 BDOS ROM MA-7-2
+				;------------------------------------------------------
+				
+				;BDOS code was compiled from a higher language(probably C)
+				;and is a bit difficult to read.
+				
+				
+					org	$1000
+					
+				;------------------------
+				;BDOS Entry
+				;------------------------
+				
+1000 : C3 3B 18 	" ; "		jmp	L183B	;Device B Disk handler
+1003 : C3 00 00 	"   "		jmp	L0000	;reset
+
+				;FDD sector command data FM single density
+				
+1006 : 					db	00	;N   (128 bytes) 
+1007 : 					db	1A	;EOT (26 sectors)
+1008 : 					db	07	;GPL gap length
+1009 : 					db	FF	;DTL (data length)
+
+				;FDD sector command data MFM double density
+
+100A : 					db	03	;N   (1024 bytes)
+100B : 					db	08	;EOT (8 sectors)
+100C : 					db	35	;GPL (gap length)
+100D : 					db	FF	;DTL (data length)
+
+				;FDD data FM
+
+100E : 					db	00      ;
+100F : 					db	1A      ;
+1010 : 					db	1B      ;
+1011 : 					db	E5      ;
+
+				;FDD data MFM
+
+1012 : 					db	03
+1013 :                  		db	08
+1014 : 					db	74
+1015 : 					db	E5
+
+				;-----------------------------
+				;Write FDC data
+				;-----------------------------
+					
+				;Entry:
+				;	C = data to write
+				
+1016				L1016:
+1016 : 21 BC 2F 	"! /"		lxi	h,$2FBC ;save FDD data
+1019 : 71 		"q"		mov	m,c
+101A				L101A:
+101A : DB 40 		" @"		in	$40	;FDD Status
+101C : E6 C0 		"  "		ani	$C0	;keep RQM and DIO
+101E : FE 80 		"  "		cpi	$80	;Data to FDC and ready
+1020 : CA 26 10 	" & "		jz	L1026	;ready
+1023 : C3 1A 10 	"   "		jmp	L101A	;loop while busy
+				;
+1026				L1026:
+1026 : 3A BC 2F 	": /"		lda	$2FBC	;Get FDD data
+1029 : D3 41 		" A"		out	$41	;write FDC data
+102B : C9 		" "		ret
+
+				;-------------------------------
+				;read FDC data
+				;-------------------------------
+				
+				;exit:
+				;	A = data
+								
+102C				L102C:
+102C : DB 40 		" @"		in	$40	;FDC status
+102E : E6 C0 		"  "		ani	$C0	;keep RQM and DIO
+1030 : FE C0 		"  "		cpi	$C0	;test Data to CPU and Ready 
+1032 : CA 38 10 	" 8 "		jz	L1038	;ready
+1035 : C3 2C 10 	" , "		jmp	L102C	;loop while busy
+1038				L1038:
+1038 : DB 41 		" A"		in	$41	;Read Data
+103A : C9 		" "		ret
+
+				;-------------------------------
+				;set FDD DMA channel 0
+				;-------------------------------
+				
+				;	(2FA0) = DMA length
+				;	(2FA8) = DMA direction
+					
+103B				L103B:
+103B : F3 		" "		di
+103C : 01 A0 2B 	"  +"		lxi	b,$2BA0	;DMA buffer 
+103F : 79 		"y"		mov	a,c
+1040 : D3 60 		" `"		out	$60
+1042 : 78 		"x"		mov	a,b
+1043 : D3 60 		" `"		out	$60
+1045 : 2A A0 2F 	"* /"		lhld	$2FA0	;DMA Length
+1048 : 2B 		"+"		dcx	h	
+1049 : 7D 		"}"		mov	a,l	;
+104A : D3 61 		" a"		out	$61
+104C : 7C 		"|"		mov	a,h
+104D : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+1050 : 86 		" "		add	m
+1051 : D3 61 		" a"		out	$61	;
+1053 : 3E 75 		">u"		mvi	a,$75	;execute DMA/Halt CPU Board ?
+1055 : D3 68 		" h"		out	$68
+1057 : FB 		" "		ei
+1058 : C9 		" "		ret
+
+				;---------------------------------
+				;Write multiple FDD data (E bytes at BC)
+				;---------------------------------
+				
+1059				L1059:
+1059 : 21 BF 2F 	"! /"		lxi	h,$2FBF	
+105C : 73 		"s"		mov	m,e	;length
+105D : 2B 		"+"		dcx	h
+105E : 70 		"p"		mov	m,b	;pointer
+105F : 2B 		"+"		dcx	h
+1060 : 71 		"q"		mov	m,c
+1061 : 21 C0 2F 	"! /"		lxi	h,$2FC0	;counter
+1064 : 36 00 		"6 "		mvi	m,$00
+1066				L1066:
+1066 : 3A BF 2F 	": /"		lda	$2FBF	
+1069 : 3D 		"="		dcr	a	;length-1
+106A : 21 C0 2F 	"! /"		lxi	h,$2FC0	;counter
+106D : BE 		" "		cmp	m
+106E : DA 86 10 	"   "		jc	L1086	;done
+1071 : 2A C0 2F 	"* /"		lhld	$2FC0	
+1074 : 26 00 		"& "		mvi	h,$00
+1076 : EB 		" "		xchg
+1077 : 2A BD 2F 	"* /"		lhld	$2FBD	;pointer
+107A : 19 		" "		dad	d
+107B : 4E 		"N"		mov	c,m
+107C : CD 16 10 	"   "		call	L1016	;Write FDC data
+107F : 21 C0 2F 	"! /"		lxi	h,$2FC0
+1082 : 34 		"4"		inr	m
+1083 : C2 66 10 	" f "		jnz	L1066
+1086				L1086:
+1086 : C9 		" "		ret
+
+				;----------------------------
+				;sector command data
+				;----------------------------
+				
+1087				L1087:
+1087 : 2A B8 2F 	"* /"		lhld	$2FB8	;C track
+108A : 4D 		"M"		mov	c,l
+108B : CD 16 10 	"   "		call	L1016	;Write FDC data
+108E : 2A AC 2F 	"* /"		lhld	$2FAC	;H head
+1091 : 4D 		"M"		mov	c,l
+1092 : CD 16 10 	"   "		call	L1016	;Write FDC data
+1095 : 2A B9 2F 	"* /"		lhld	$2FB9	;R sector
+1098 : 4D 		"M"		mov	c,l
+1099 : CD 16 10 	"   "		call	L1016	;Write FDC data
+109C : 3A A9 2F 	": /"		lda	$2FA9	;single Density
+109F : 1F 		" "		rar
+10A0 : D2 AE 10 	"   "		jnc	L10AE	;jmp FM single density
+
+				;MFM double density
+				
+10A3 : 1E 04 		"  "		mvi	e,$04	;length
+10A5 : 01 06 10 	"   "		lxi	b,$1006	;*MFM data
+10A8 : CD 59 10 	" Y "		call	L1059	;Write E bytes of FDD data at BC
+10AB : C3 B6 10 	"   "		jmp	L10B6	;ret
+
+				;FM single density
+				
+10AE				L10AE:
+10AE : 1E 04 		"  "		mvi	e,$04	;length
+10B0 : 01 0A 10 	"   "		lxi	b,$100A	;*FM data
+10B3 : CD 59 10 	" Y "		call	L1059	;Write E bytes of FDD data at BC
+10B6				L10B6:
+10B6 : C9 		" "		ret
+
+				;---------------------------------
+				;MemCopy
+				;---------------------------------
+
+				;Copies a block of memory from or to CPU-RAM
+				;and takes care of 32K CPU RAM boundary crossing.
+				
+				
+				;	(2FA8) = 40 to CPU-RAM
+				;	         80 from CPU-RAM
+					       
+				;	(SP) = length
+					
+				;	BC = CPU-RAM Addr
+				;	DE = BDOS buffer addr
+					
+10B7				L10B7:
+10B7 : 21 C6 2F 	"! /"		lxi	h,$2FC6	
+10BA : 72 		"r"		mov	m,d	
+10BB : 2B 		"+"		dcx	h
+10BC : 73 		"s"		mov	m,e	;2FC5 = CPU-RAM Addr
+10BD : 2B 		"+"		dcx	h
+10BE : 70 		"p"		mov	m,b
+10BF : 2B 		"+"		dcx	h
+10C0 : 71 		"q"		mov	m,c	;2FC3 = BDOS RAM Addr
+10C1 : 2B 		"+"		dcx	h
+10C2 : D1 		" "		pop	d
+10C3 : C1 		" "		pop	b
+10C4 : 70 		"p"		mov	m,b	
+10C5 : 2B 		"+"		dcx	h
+10C6 : 71 		"q"		mov	m,c	;2FC1 = length
+10C7 : D5 		" "		push	d
+10C8 : 21 00 00 	"!  "		lxi	h,L0000	;select upper RAM
+10CB : 36 FE 		"6 "		mvi	m,$FE
+10CD : 3A A8 2F 	": /"		lda	$2FA8	;DMA directon	
+10D0 : FE 40 		" @"		cpi	$40	;to CPU-RAM
+10D2 : C2 8A 11 	"   "		jnz	L118A	;from CPU-RAM
+
+				;copy to CPU RAM
+				
+10D5 : 01 00 80 	"   "		lxi	b,$8000	;
+10D8 : 11 C5 2F 	"  /"		lxi	d,$2FC5	;*CPU RAM addr
+10DB : CD C1 18 	"   "		call	L18C1	;Subtract HL = WORD(DE)-BC
+10DE : D2 68 11 	" h "		jnc	L1168	;CPU RAM addr in upper 32K RAM
+
+					;adjust CPU RAM addr
+					
+10E1 : 2A C5 2F 	"* /"		lhld	$2FC5	;*CPU RAM addr
+10E4 : 11 00 80 	"   "		lxi	d,$8000	;Max Length
+10E7 : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+10EA : 22 C9 2F 	"" /"		shld	$2FC9	;Max Length allowed
+10ED : EB 		" "		xchg		;DE=MAx length
+10EE : 21 C1 2F 	"! /"		lxi	h,$2FC1 ;*length
+10F1 : CD CC 18 	"   "		call	L18CC	;Substract HL=DE-WORD(HL)
+10F4 : D2 43 11 	" C "		jnc	L1143	;no 32K boundary crossed
+
+				;32K boundary is crossed, copy higher RAM part
+				
+10F7 : 01 C9 2F 	"  /"		lxi	b,$2FC9	;max copy length
+10FA : 11 C1 2F 	"  /"		lxi	d,$2FC1	;*length
+10FD : CD BC 18 	"   "		call	L18BC	;
+1100 : E5 		" "		push	h	;length after 32K boundary
+1101 : 2A C9 2F 	"* /"		lhld	$2FC9	;Length before boundary
+1104 : EB 		" "		xchg	
+1105 : 2A C3 2F 	"* /"		lhld	$2FC3	;
+1108 : 19 		" "		dad	d
+1109 : 44 		"D"		mov	b,h	;higher 32K CPU-RAM addr
+110A : 4D 		"M"		mov	c,l
+110B : 11 00 80 	"   "		lxi	d,$8000	;start at upper 32K RAM
+110E : E1 		" "		pop	h	;length
+110F				L110F:
+110F : 0A 		" "		ldax	b	;(DE)=(BC)
+1110 : 12 		" "		stax	d
+1111 : 03 		" "		inx	b	;BC+1
+1112 : 13 		" "		inx	d	;DE+1
+1113 : 2B 		"+"		dcx	h	;Length-1
+1114 : 7C 		"|"		mov	a,h	;
+1115 : B5 		" "		ora	l
+1116 : C2 0F 11 	"   "		jnz	L110F	;loop copy more bytes
+
+1119 : 21 00 00 	"!  "		lxi	h,L0000 ;Select Lower 32K CPU-RAM
+111C : 36 FF 		"6 "		mvi	m,$FF	;
+111E : 2A C5 2F 	"* /"		lhld	$2FC5
+1121 : 11 00 80 	"   "		lxi	d,$8000
+1124 : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+1127 : 11 00 80 	"   "		lxi	d,$8000
+112A : E5 		" "		push	h
+112B : 2A C5 2F 	"* /"		lhld	$2FC5
+112E : 19 		" "		dad	d
+112F : EB 		" "		xchg
+1130 : 2A C3 2F 	"* /"		lhld	$2FC3
+1133 : 44 		"D"		mov	b,h
+1134 : 4D 		"M"		mov	c,l
+1135 : E1 		" "		pop	h
+1136				L1136:
+1136 : 0A 		" "		ldax	b
+1137 : 12 		" "		stax	d
+1138 : 03 		" "		inx	b
+1139 : 13 		" "		inx	d
+113A : 2B 		"+"		dcx	h
+113B : 7C 		"|"		mov	a,h
+113C : B5 		" "		ora	l
+113D : C2 36 11 	" 6 "		jnz	L1136
+1140 : C3 64 11 	" d "		jmp	L1164
+				;
+1143				L1143:
+1143 : 21 00 00 	"!  "		lxi	h,L0000	;Select lower 32K
+1146 : 36 FF 		"6 "		mvi	m,$FF
+1148 : 2A C1 2F 	"* /"		lhld	$2FC1
+114B : 11 00 80 	"   "		lxi	d,$8000
+114E : E5 		" "		push	h
+114F : 2A C5 2F 	"* /"		lhld	$2FC5
+1152 : 19 		" "		dad	d
+1153 : EB 		" "		xchg
+1154 : 2A C3 2F 	"* /"		lhld	$2FC3
+1157 : 44 		"D"		mov	b,h
+1158 : 4D 		"M"		mov	c,l
+1159 : E1 		" "		pop	h
+115A				L115A:
+115A : 0A 		" "		ldax	b
+115B : 12 		" "		stax	d
+115C : 03 		" "		inx	b
+115D : 13 		" "		inx	d
+115E : 2B 		"+"		dcx	h
+115F : 7C 		"|"		mov	a,h
+1160 : B5 		" "		ora	l
+1161 : C2 5A 11 	" Z "		jnz	L115A
+1164				L1164:
+1164 : C9 		" "		ret
+
+1165 : C3 87 11 	"   "		jmp	L1187
+
+				;-----------------------------
+				
+1168				L1168:
+1168 : 2A C5 2F 	"* /"		lhld	$2FC5	;
+116B : 11 00 FF 	"   "		lxi	d,$FF00
+116E : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+1171 : EB 		" "		xchg
+1172 : 21 C1 2F 	"! /"		lxi	h,$2FC1
+1175 : CD CC 18 	"   "		call	L18CC	;Substract HL=DE-WORD(HL)
+1178 : D2 87 11 	"   "		jnc	L1187
+117B : 2A C5 2F 	"* /"		lhld	$2FC5
+117E : 11 00 FF 	"   "		lxi	d,$FF00
+1181 : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+1184 : 22 C1 2F 	"" /"		shld	$2FC1
+1187				L1187:
+1187 : C3 1B 12 	"   "		jmp	L121B
+
+				;copy from CPU-RAM
+				
+118A				L118A:
+118A : 01 00 80 	"   "		lxi	b,$8000
+118D : 11 C3 2F 	"  /"		lxi	d,$2FC3
+1190 : CD C1 18 	"   "		call	L18C1
+1193 : D2 1B 12 	"   "		jnc	L121B
+1196 : 2A C3 2F 	"* /"		lhld	$2FC3
+1199 : 11 00 80 	"   "		lxi	d,$8000
+119C : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+119F : 22 C9 2F 	"" /"		shld	$2FC9
+11A2 : 01 C1 2F 	"  /"		lxi	b,$2FC1
+11A5 : 11 C9 2F 	"  /"		lxi	d,$2FC9
+11A8 : CD BC 18 	"   "		call	L18BC
+11AB : D2 F9 11 	"   "		jnc	L11F9
+11AE : 01 C9 2F 	"  /"		lxi	b,$2FC9
+11B1 : 11 C1 2F 	"  /"		lxi	d,$2FC1
+11B4 : CD BC 18 	"   "		call	L18BC
+11B7 : E5 		" "		push	h
+11B8 : 2A C9 2F 	"* /"		lhld	$2FC9
+11BB : EB 		" "		xchg
+11BC : 2A C5 2F 	"* /"		lhld	$2FC5
+11BF : 19 		" "		dad	d
+11C0 : EB 		" "		xchg
+11C1 : 01 00 80 	"   "		lxi	b,$8000
+11C4 : E1 		" "		pop	h
+11C5				L11C5:
+11C5 : 0A 		" "		ldax	b
+11C6 : 12 		" "		stax	d
+11C7 : 03 		" "		inx	b
+11C8 : 13 		" "		inx	d
+11C9 : 2B 		"+"		dcx	h
+11CA : 7C 		"|"		mov	a,h
+11CB : B5 		" "		ora	l
+11CC : C2 C5 11 	"   "		jnz	L11C5
+11CF : 21 00 00 	"!  "		lxi	h,L0000
+11D2 : 36 FF 		"6 "		mvi	m,$FF
+11D4 : 2A C3 2F 	"* /"		lhld	$2FC3
+11D7 : 11 00 80 	"   "		lxi	d,$8000
+11DA : CD B5 18 	"   "		call	L18B5	;Substract HL=DE-HL
+11DD : 11 00 80 	"   "		lxi	d,$8000
+11E0 : E5 		" "		push	h
+11E1 : 2A C3 2F 	"* /"		lhld	$2FC3
+11E4 : 19 		" "		dad	d
+11E5 : 44 		"D"		mov	b,h
+11E6 : 4D 		"M"		mov	c,l
+11E7 : 2A C5 2F 	"* /"		lhld	$2FC5
+11EA : EB 		" "		xchg
+11EB : E1 		" "		pop	h
+11EC				L11EC:
+11EC : 0A 		" "		ldax	b
+11ED : 12 		" "		stax	d
+11EE : 03 		" "		inx	b
+11EF : 13 		" "		inx	d
+11F0 : 2B 		"+"		dcx	h
+11F1 : 7C 		"|"		mov	a,h
+11F2 : B5 		" "		ora	l
+11F3 : C2 EC 11 	"   "		jnz	L11EC
+11F6 : C3 1A 12 	"   "		jmp	L121A
+				;
+11F9				L11F9:
+11F9 : 21 00 00 	"!  "		lxi	h,L0000
+11FC : 36 FF 		"6 "		mvi	m,$FF
+11FE : 2A C1 2F 	"* /"		lhld	$2FC1
+1201 : 11 00 80 	"   "		lxi	d,$8000
+1204 : E5 		" "		push	h
+1205 : 2A C3 2F 	"* /"		lhld	$2FC3
+1208 : 19 		" "		dad	d
+1209 : 44 		"D"		mov	b,h
+120A : 4D 		"M"		mov	c,l
+120B : 2A C5 2F 	"* /"		lhld	$2FC5
+120E : EB 		" "		xchg
+120F : E1 		" "		pop	h
+1210				L1210:
+1210 : 0A 		" "		ldax	b
+1211 : 12 		" "		stax	d
+1212 : 03 		" "		inx	b
+1213 : 13 		" "		inx	d
+1214 : 2B 		"+"		dcx	h
+1215 : 7C 		"|"		mov	a,h
+1216 : B5 		" "		ora	l
+1217 : C2 10 12 	"   "		jnz	L1210
+121A				L121A:
+121A : C9 		" "		ret
+				;
+121B				L121B:
+121B : 2A C1 2F 	"* /"		lhld	$2FC1
+121E : E5 		" "		push	h
+121F : 2A C3 2F 	"* /"		lhld	$2FC3
+1222 : 44 		"D"		mov	b,h
+1223 : 4D 		"M"		mov	c,l
+1224 : 2A C5 2F 	"* /"		lhld	$2FC5
+1227 : EB 		" "		xchg
+1228 : E1 		" "		pop	h
+1229				L1229:
+1229 : 0A 		" "		ldax	b
+122A : 12 		" "		stax	d
+122B : 03 		" "		inx	b
+122C : 13 		" "		inx	d
+122D : 2B 		"+"		dcx	h
+122E : 7C 		"|"		mov	a,h
+122F : B5 		" "		ora	l
+1230 : C2 29 12 	" ) "		jnz	L1229
+1233 : C9 		" "		ret
+
+				;-------------------------
+				;read Bit 5 port C
+				;-------------------------
+				
+1234				L1234:
+1234 : DB 52 		" R"		in	$52	;8255 port C
+1236 : E6 10 		"  "		ani	$10	;
+1238 : FE 00 		"  "		cpi	$00
+123A : C2 40 12 	" @ "		jnz	L1240
+
+123D : 3E 00 		"> "		mvi	a,$00
+123F : C9 		" "		ret
+				;
+1240				L1240:
+1240 : 3E FF 		"> "		mvi	a,$FF
+1242 : C9 		" "		ret
+1243 : C9 		" "		ret
+
+				;------------------------
+				;read FDD status
+				;------------------------
+				
+				;	C= number of bytes to read
+				
+1244				L1244:
+1244 : 21 CB 2F 	"! /"		lxi	h,$2FCB
+1247 : 71 		"q"		mov	m,c	;count
+1248 : 21 CC 2F 	"! /"		lxi	h,$2FCC
+124B : 36 00 		"6 "		mvi	m,$00	;counter
+124D				L124D:
+124D : 3A CB 2F 	": /"		lda	$2FCB	;
+1250 : 3D 		"="		dcr	a	;count-1
+1251 : 21 CC 2F 	"! /"		lxi	h,$2FCC ;
+1254 : BE 		" "		cmp	m
+1255 : DA 6F 12 	" o "		jc	L126F	;done
+
+1258 : CD 2C 10 	" , "		call	L102C	;read FDC data
+125B : 2A CC 2F 	"* /"		lhld	$2FCC	;
+125E : 26 00 		"& "		mvi	h,$00
+1260 : 01 AE 2F 	"  /"		lxi	b,$2FAE ;FDD status buffer
+1263 : 09 		" "		dad	b
+1264 : 77 		"w"		mov	m,a	;
+1265 : 3A CC 2F 	": /"		lda	$2FCC
+1268 : 3C 		"<"		inr	a	;ptr+1
+1269 : 32 CC 2F 	"2 /"		sta	$2FCC	
+126C : C2 4D 12 	" M "		jnz	L124D	;loop
+126F				L126F:
+126F : C9 		" "		ret
+
+				;------------------------
+				;Sense status
+				;------------------------
+				
+1270				L1270:
+1270 : 0E 08 		"  "		mvi	c,$08	;sense interrupt status command
+1272 : CD 16 10 	"   "		call	L1016	;Write FDC data
+1275 : 0E 02 		"  "		mvi	c,$02	;ST0,PCN
+1277 : CD 44 12 	" D "		call	L1244	;Read multiple FDD data
+127A : C9 		" "		ret
+
+				;------------------------
+				;disk device end
+				;------------------------
+				
+                                ;disk command completed and sets device result
+                                                                
+127B				L127B:
+127B : 21 00 00 	"!  "		lxi	h,L0000	;upper 32K BANK
+127E : 36 FE 		"6 "		mvi	m,$FE
+1280 : 3A AE 2F 	": /"		lda	$2FAE	;ST0
+1283 : E6 C0 		"  "		ani	$C0	;Interrupt Code
+1285 : FE 00 		"  "		cpi	$00	;Test Normal
+1287 : C2 93 12 	"   "		jnz	L1293	;FDD error
+
+                                ;no error
+                                
+128A : 21 00 00 	"!  "		lxi	h,L0000 ;No error
+128D : 22 21 FF 	""! "		shld	$FF21
+1290 : C3 99 12 	"   "		jmp	L1299	;signal ready
+
+					;FDD Error
+1293				L1293:
+1293 : 21 FF FF 	"!  "		lxi	h,$FFFF	;Disk Error
+1296 : 22 21 FF 	""! "		shld	$FF21	;
+1299				L1299:
+1299 : 21 23 FF 	"!# "		lxi	h,$FF23	;signal device ready
+129C : 36 00 		"6 "		mvi	m,$00
+129E : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State	
+12A1 : 36 00 		"6 "		mvi	m,$00	;accept new command
+12A3 : C9 		" "		ret
+
+				;-------------------------
+				;preset/delay
+				;-------------------------
+				
+				;1st Pass do nothing,other passes do 1 sec delay ?
+12A4				L12A4:
+12A4 : 3A AB 2F 	": /"		lda	$2FAB	;Delay state
+12A7 : 1F 		" "		rar
+12A8 : D2 C8 12 	"   "		jnc	L12C8	;jr Just initialize
+
+12AB : 21 CD 2F 	"! /"		lxi	h,$2FCD	;counter
+12AE : 36 01 		"6 "		mvi	m,$01	;1st count
+12B0				L12B0:
+12B0 : 3E 0A 		"> "		mvi	a,$0A	;last count
+12B2 : 21 CD 2F 	"! /"		lxi	h,$2FCD	;counter 
+12B5 : BE 		" "		cmp	m
+12B6 : DA C8 12 	"   "		jc	L12C8	;done
+
+12B9 : 3E 64 		">d"		mvi	a,$64	;100 msec ?
+12BB : CD D5 18 	"   "		call	L18D5	;Delay
+12BE : 3A CD 2F 	": /"		lda	$2FCD
+12C1 : 3C 		"<"		inr	a	;count+1
+12C2 : 32 CD 2F 	"2 /"		sta	$2FCD
+12C5 : C2 B0 12 	"   "		jnz	L12B0	;loop
+
+12C8				L12C8:
+12C8 : 21 AB 2F 	"! /"		lxi	h,$2FAB	;Reties state
+12CB : 36 FF 		"6 "		mvi	m,$FF	;Reset retries
+12CD : C9 		" "		ret
+
+				;-----------------------
+				;Select drive 
+				;-----------------------
+				
+12CE				L12CE:
+12CE : 3A B6 2F 	": /"		lda	$2FB6	;commandDrive
+12D1 : E6 F8 		"  "		ani	$F8	;ignore command bits
+12D3 : 1F 		" "		rar
+12D4 : 1F 		" "		rar
+12D5 : 1F 		" "		rar
+12D6 : 1F 		" "		rar
+12D7 : E6 03 		"  "		ani	$03	;keep only drive bits
+12D9 : 32 A6 2F 	"2 /"		sta	$2FA6	;Drive nr 0..3
+12DC : 0E 04 		"  "		mvi	c,$04	;Sense Drive Status FDD command
+12DE : CD 16 10 	"   "		call	L1016	;Write FDC data
+12E1 : 2A A6 2F 	"* /"		lhld	$2FA6	;drive
+12E4 : 4D 		"M"		mov	c,l	;drive
+12E5 : CD 16 10 	"   "		call	L1016	;Write FDC data
+12E8 : CD 2C 10 	" , "		call	L102C	;read FDC data
+12EB : 32 A3 2F 	"2 /"		sta	$2FA3	;ST3 
+12EE : 3A A3 2F 	": /"		lda	$2FA3	;ST3 
+12F1 : E6 08 		"  "		ani	$08	;test TS Two Sides status 
+12F3 : FE 00 		"  "		cpi	$00	;to detect Single Density or double density disks?
+12F5 : C2 10 13 	"   "		jnz	L1310	;double density disk
+
+				;FM  Single density (TS=0)
+				
+12F8 : 21 A9 2F 	"! /"		lxi	h,$2FA9	;Single Density
+12FB : 36 FF 		"6 "		mvi	m,$FF	;FM
+12FD : 21 A7 2F 	"! /"		lxi	h,$2FA7	;MT MF
+1300 : 36 00 		"6 "		mvi	m,$00	;FM
+1302 : 21 AC 2F 	"! /"		lxi	h,$2FAC	;
+1305 : 36 00 		"6 "		mvi	m,$00	;
+1307 : 21 80 00 	"!  "		lxi	h,$0080	;128 byte sectors
+130A : 22 A0 2F 	"" /"		shld	$2FA0	;DMA length
+130D : C3 28 13 	" ( "		jmp	L1328	;
+
+				;MFM Double density (TS=1)
+				
+1310				L1310:
+1310 : 21 A9 2F 	"! /"		lxi	h,$2FA9	;Single Desnsity
+1313 : 36 00 		"6 "		mvi	m,$00	;MFM
+1315 : 21 A7 2F 	"! /"		lxi	h,$2FA7	;MT MF
+1318 : 36 40 		"6@"		mvi	m,$40	;MFM
+131A : 3A B8 2F 	": /"		lda	$2FB8
+131D : E6 01 		"  "		ani	$01	
+131F : 32 AC 2F 	"2 /"		sta	$2FAC   ;
+1322 : 21 00 04 	"!  "		lxi	h,$0400	;1024 byte sector
+1325 : 22 A0 2F 	"" /"		shld	$2FA0	;DMA length
+1328				L1328:
+1328 : 3A A3 2F 	": /"		lda	$2FA3	;ST3
+132B : E6 20 		"  "		ani	$20	;RY
+132D : FE 00 		"  "		cpi	$00
+132F : C2 45 13 	" E "		jnz	L1345	;jmp Drive Ready
+
+				;error drive not ready 
+				
+1332 : 21 00 00 	"!  "		lxi	h,L0000	;Select uppper 32K RAM
+1335 : 36 FE 		"6 "		mvi	m,$FE
+1337 : 21 EE EE 	"!  "		lxi	h,$EEEE	;signal Error
+133A : 22 21 FF 	""! "		shld	$FF21
+133D : 21 23 FF 	"!# "		lxi	h,$FF23	;
+1340 : 36 00 		"6 "		mvi	m,$00	;Disk Device Ready
+1342 : C3 4A 13 	" J "		jmp	L134A	
+				;
+1345				L1345:
+1345 : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+1348 : 36 01 		"6 "		mvi	m,$01	;Signal Drive selected
+134A				L134A:
+134A : C9 		" "		ret
+
+				;------------------------
+				
+				;Recalibrate disk command 
+				
+134B				L134B:
+134B : CD CE 12 	"   "		call	L12CE	;Select drive
+134E : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+1351 : FE 00 		"  "		cpi	$00	;Test state changed
+1353 : C2 57 13 	" W "		jnz	L1357	;Handle Next state
+1356 : C9 		" "		ret		;Return 
+
+				;Drive Selected, Do recalibrate
+				
+1357				L1357:
+1357 : CD A4 12 	"   "		call	L12A4	;preset/delay
+135A : 0E 07 		"  "		mvi	c,$07	;Recalibrate FDD command
+135C : CD 16 10 	"   "		call	L1016	;Write FDC data
+135F : 2A A6 2F 	"* /"		lhld	$2FA6	;Drive Number
+1362 : 4D 		"M"		mov	c,l	;
+1363 : CD 16 10 	"   "		call	L1016	;Write FDC data
+1366 : 21 A4 2F 	"! /"		lxi	h,$2FA4	;Signal ..
+1369 : 36 01 		"6 "		mvi	m,$01	;
+136B : 3A A6 2F 	": /"		lda	$2FA6	;Drive Number
+136E : 3C 		"<"		inr	a	;1,2
+136F : 23 		"#"		inx	h	;2FA5 
+1370 : 77 		"w"		mov	m,a	;current drive ?
+1371 : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+1374 : 36 03 		"6 "		mvi	m,$03	;Drive busy/seeking ?
+1376 : C9 		" "		ret
+
+				;------------------------
+				;seek track
+				;------------------------
+				
+1377				L1377:
+1377 : 3A A9 2F 	": /"		lda	$2FA9	;SD
+137A : 2F 		"/"		cma
+137B : 1F 		" "		rar
+137C : D2 8F 13 	"   "		jnc	L138F	; FM/single density
+
+				;for MFM double current track ?
+				
+137F : 2A B8 2F 	"* /"		lhld	$2FB8	;track ?
+1382 : 26 00 		"& "		mvi	h,$00
+1384 : EB 		" "		xchg
+1385 : 21 02 00 	"!  "		lxi	h,$0002	;
+1388 : CD 89 18 	"   "		call	L1889	;Multiply HL=HL*DE
+138B : 21 B8 2F 	"! /"		lxi	h,$2FB8
+138E : 73 		"s"		mov	m,e	;track ?
+
+138F				L138F:
+138F : 3A B8 2F 	": /"		lda	$2FB8	;Track
+1392 : 3C 		"<"		inr	a	;+1
+1393 : 21 A4 2F 	"! /"		lxi	h,$2FA4	;previous track ?
+1396 : 96 		" "		sub	m	;
+1397 : D6 01 		"  "		sui	$01	
+1399 : 9F 		" "		sbb	a	;FF same track?
+139A : F5 		" "		push	psw
+139B : 3A A6 2F 	": /"		lda	$2FA6	;Side ?
+139E : 3C 		"<"		inr	a
+139F : 23 		"#"		inx	h	;2FA5 previous drive ?
+13A0 : 96 		" "		sub	m
+13A1 : D6 01 		"  "		sui	$01
+13A3 : 9F 		" "		sbb	a	;FF same drive ?
+13A4 : C1 		" "		pop	b
+13A5 : 48 		"H"		mov	c,b	;
+13A6 : A1 		" "		ana	c
+13A7 : 1F 		" "		rar
+13A8 : D2 B3 13 	"   "		jnc	L13B3	;jmp not same track on same drive
+
+13AB : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+13AE : 36 01 		"6 "		mvi	m,$01	;Signal read/write sector
+13B0 : C3 F3 13 	"   "		jmp	L13F3	;ret
+
+				;seek track
+				
+13B3				L13B3:
+13B3 : CD A4 12 	"   "		call	L12A4	;preset/delay
+13B6 : 3A B8 2F 	": /"		lda	$2FB8	;Track 
+13B9 : 3C 		"<"		inr	a	;+1
+13BA : 32 A4 2F 	"2 /"		sta	$2FA4	;Previous track
+13BD : 3A A6 2F 	": /"		lda	$2FA6	;Drive
+13C0 : 3C 		"<"		inr	a	;
+13C1 : 32 A5 2F 	"2 /"		sta	$2FA5	;Last drive
+13C4 : 3A B8 2F 	": /"		lda	$2FB8	;Track
+13C7 : FE 00 		"  "		cpi	$00	;track 0 ?
+13C9 : C2 DB 13 	"   "		jnz	L13DB	;not track 0
+
+				;seek track 0
+				
+13CC : 0E 07 		"  "		mvi	c,$07	;Recalibrate FDD command
+13CE : CD 16 10 	"   "		call	L1016	;Write FDC data
+13D1 : 2A A6 2F 	"* /"		lhld	$2FA6
+13D4 : 4D 		"M"		mov	c,l
+13D5 : CD 16 10 	"   "		call	L1016	;Write FDC data
+13D8 : C3 EE 13 	"   "		jmp	L13EE
+
+				;Seek track
+				
+13DB				L13DB:
+13DB : 0E 0F 		"  "		mvi	c,$0F	;seek FDD command
+13DD : CD 16 10 	"   "		call	L1016	;Write FDC data
+13E0 : 2A A6 2F 	"* /"		lhld	$2FA6
+13E3 : 4D 		"M"		mov	c,l
+13E4 : CD 16 10 	"   "		call	L1016	;Write FDC data
+13E7 : 2A B8 2F 	"* /"		lhld	$2FB8
+13EA : 4D 		"M"		mov	c,l
+13EB : CD 16 10 	"   "		call	L1016	;Write FDC data
+
+13EE				L13EE:
+13EE : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+13F1 : 36 04 		"6 "		mvi	m,$04	;seeking track
+13F3				L13F3:
+13F3 : C9 		" "		ret
+
+				;------------------------
+				;Drive A Read Sector command
+				;------------------------
+				
+13F4				L13F4:
+13F4 : CD CE 12 	"   "		call	L12CE	;Select drive
+13F7 : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+13FA : FE 00 		"  "		cpi	$00	;Test state change
+13FC : C2 00 14 	"   "		jnz	L1400	;continue
+13FF : C9 		" "		ret		;abort
+
+				;Drive selected,Read sector Drive A
+				
+1400				L1400:
+1400 : 21 A2 2F 	"! /"		lxi	h,$2FA2	;Drive
+1403 : 36 00 		"6 "		mvi	m,$00	;Drive A
+1405 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+1408 : 36 40 		"6@"		mvi	m,$40	;data to CPU-RAM
+140A : CD 77 13 	" w "		call	L1377	;seek track
+140D : C9 		" "		ret
+
+				;-----------------------
+				;Drive B read sector command
+				;-----------------------
+				
+140E				L140E:
+140E : CD CE 12 	"   "		call	L12CE	;Select drive
+1411 : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+1414 : FE 00 		"  "		cpi	$00
+1416 : C2 1A 14 	"   "		jnz	L141A
+1419 : C9 		" "		ret
+
+				;Drive Selected, read sector drive B
+				
+141A				L141A:
+141A : 21 A2 2F 	"! /"		lxi	h,$2FA2	;Drive
+141D : 36 FF 		"6 "		mvi	m,$FF	;Drive B
+141F : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+1422 : 36 40 		"6@"		mvi	m,$40	;data to CPU-RAM
+1424 : CD 77 13 	" w "		call	L1377	;seek track
+1427 : C9 		" "		ret
+				;-----------------------
+                                ;Drive A write sector
+                                ;------------------------
+1428				L1428:
+1428 : CD CE 12 	"   "		call	L12CE	;Select drive
+142B : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+142E : FE 00 		"  "		cpi	$00
+1430 : C2 34 14 	" 4 "		jnz	L1434   ;Write sector to buffer
+1433 : C9 		" "		ret
+
+                                ;Drive A selected,write sector
+                                
+1434				L1434:
+1434 : 21 A2 2F 	"! /"		lxi	h,$2FA2	;Drive
+1437 : 36 00 		"6 "		mvi	m,$00	;Drive A
+1439 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+143C : 36 80 		"6 "		mvi	m,$80	;from CPU RAM
+143E : CD 77 13 	" w "		call	L1377	;seek track
+1441 : 2A A0 2F 	"* /"		lhld	$2FA0	;DMA length
+1444 : E5 		" "		push	h       ;
+1445 : 2A BA 2F 	"* /"		lhld	$2FBA   ;CPU RAM addr
+1448 : 44 		"D"		mov	b,h
+1449 : 4D 		"M"		mov	c,l
+144A : 11 A0 2B 	"  +"		lxi	d,$2BA0 ;Sector buffer
+144D : CD B7 10 	"   "		call	L10B7	;MemCopy
+1450 : C9 		" "		ret
+
+				;------------------------
+				;Write sector drive B
+				;------------------------
+				
+1451				L1451:
+1451 : CD CE 12 	"   "		call	L12CE	;Select drive
+1454 : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+1457 : FE 00 		"  "		cpi	$00
+1459 : C2 5D 14 	" ] "		jnz	L145D
+145C : C9 		" "		ret
+
+				;Drive selected,Write sector Drive B
+				
+145D				L145D:
+145D : 21 A2 2F 	"! /"		lxi	h,$2FA2	;Drive
+1460 : 36 FF 		"6 "		mvi	m,$FF	;Drive B
+1462 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+1465 : 36 80 		"6 "		mvi	m,$80	;from CPU RAM
+1467 : CD 77 13 	" w "		call	L1377	;seek track
+146A : C9 		" "		ret
+
+				;------------------------
+				;Write 128 bytes to track buffer Drive B ?
+				;------------------------				
+				
+146B				L146B:
+146B : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+146E : 36 80 		"6 "		mvi	m,$80	;from CPU RAM
+1470 : 01 80 00 	"   "		lxi	b,$0080	;128 bytes
+1473 : C5 		" "		push	b	;length 
+1474 : 2A B7 2F 	"* /"		lhld	$2FB7	;
+1477 : 26 00 		"& "		mvi	h,$00	;sector-1 ?
+1479 : 0E 07 		"  "		mvi	c,$07	
+147B : CD AC 18 	"   "		call	L18AC	;Shift left HL << C 
+147E : 01 A0 2B 	"  +"		lxi	b,$2BA0	;buffer
+1481 : 09 		" "		dad	b	
+1482 : EB 		" "		xchg		;DE=buffer+128*(2FB7)
+1483 : 2A BA 2F 	"* /"		lhld	$2FBA	
+1486 : 44 		"D"		mov	b,h	;BC=(2FBA)
+1487 : 4D 		"M"		mov	c,l
+1488 : CD B7 10 	"   "		call	L10B7	;MemCopy
+148B : 21 00 00 	"!  "		lxi	h,L0000	;select upper 32K RAM
+148E : 36 FE 		"6 "		mvi	m,$FE	
+1490 : 21 23 FF 	"!# "		lxi	h,$FF23	;
+1493 : 36 00 		"6 "		mvi	m,$00	;Ready
+1495 : C9 		" "		ret
+
+				;Read 128 bytes from sector buffer ?
+				
+1496				L1496:
+1496 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+1499 : 36 40 		"6@"		mvi	m,$40	;to CPU RAM
+149B : 01 80 00 	"   "		lxi	b,$0080
+149E : C5 		" "		push	b
+149F : 2A B7 2F 	"* /"		lhld	$2FB7
+14A2 : 26 00 		"& "		mvi	h,$00
+14A4 : 0E 07 		"  "		mvi	c,$07
+14A6 : CD AC 18 	"   "		call	L18AC	;Shift left HL << C 
+14A9 : 01 A0 2B 	"  +"		lxi	b,$2BA0
+14AC : 09 		" "		dad	b
+14AD : 44 		"D"		mov	b,h
+14AE : 4D 		"M"		mov	c,l
+14AF : 2A BA 2F 	"* /"		lhld	$2FBA
+14B2 : EB 		" "		xchg
+14B3 : CD B7 10 	"   "		call	L10B7	;MemCopy
+14B6 : 21 00 00 	"!  "		lxi	h,L0000
+14B9 : 36 FE 		"6 "		mvi	m,$FE
+14BB : 21 23 FF 	"!# "		lxi	h,$FF23 ;signal ready
+14BE : 36 00 		"6 "		mvi	m,$00
+14C0 : C9 		" "		ret
+
+                                ;-------------------------------
+				;Drive A command 2 format track
+				;-------------------------------
+                                
+14C1				L14C1:
+14C1 : 3E 03 		"> "		mvi	a,$03	;8255 set bit 1,port C
+14C3 : D3 53 		" S"		out	$53	;signal sector buffer in use ?
+14C5 : CD CE 12 	"   "		call	L12CE	;Select drive	
+14C8 : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+14CB : FE 00 		"  "		cpi	$00	;Drive selected
+14CD : C2 D1 14 	"   "		jnz	L14D1	;continue drive selected
+14D0 : C9 		" "		ret
+
+				;Drive selected,
+				
+14D1				L14D1:
+14D1 : 21 A2 2F 	"! /"		lxi	h,$2FA2	;Drive
+14D4 : 36 00 		"6 "		mvi	m,$00	;Drive A
+14D6 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+14D9 : 36 80 		"6 "		mvi	m,$80	;from CPU RAM
+14DB : CD 77 13 	" w "		call	L1377	;seek track
+14DE : 3A AA 2F 	": /"		lda	$2FAA	;Disk State
+14E1 : FE 01 		"  "		cpi	$01	;Sector ?
+14E3 : C2 EE 14 	"   "		jnz	L14EE	;
+
+                                ;set state 6
+                                
+14E6 : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+14E9 : 36 06 		"6 "		mvi	m,$06	;
+14EB : C3 F3 14 	"   "		jmp	L14F3
+
+				;set state 5 
+                                
+14EE				L14EE:
+14EE : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+14F1 : 36 05 		"6 "		mvi	m,$05	;
+14F3				L14F3:
+14F3 : 3A A9 2F 	": /"		lda	$2FA9	;SD
+14F6 : 1F 		" "		rar
+14F7 : D2 4F 15 	" O "		jnc	L154F	;jmp MFM
+
+                                ;single density
+                                
+14FA : 21 CE 2F 	"! /"		lxi	h,$2FCE  ; set 1st sector
+14FD : 36 01 		"6 "		mvi	m,$01    ; to sector 1
+
+                                ;create format data for 26 sectors
+                                
+14FF				L14FF:
+14FF : 3E 1A 		"> "		mvi	a,$1A    ;test last sector
+1501 : 21 CE 2F 	"! /"		lxi	h,$2FCE
+1504 : BE 		" "		cmp	m
+1505 : DA 4C 15 	" L "		jc	L154C   ;done 26 sectors
+
+1508 : 3A CE 2F 	": /"		lda	$2FCE   ;get sector data offset
+150B : 3D 		"="		dcr	a       ;4 * (Sector-1) 
+150C : 6F 		"o"		mov	l,a
+150D : 26 00 		"& "		mvi	h,$00
+150F : 29 		")"		dad	h
+1510 : 29 		")"		dad	h
+1511 : EB 		" "		xchg            
+1512 : 21 CF 2F 	"! /"		lxi	h,$2FCF ;sector data offset
+1515 : 73 		"s"		mov	m,e     ;4x(sector-1)
+1516 : 4E 		"N"		mov	c,m
+1517 : 06 00 		"  "		mvi	b,$00
+1519 : 21 A0 2B 	"! +"		lxi	h,$2BA0 ;sector data buffer
+151C : 09 		" "		dad	b
+151D : 3A B8 2F 	": /"		lda	$2FB8   ;
+1520 : 77 		"w"		mov	m,a     ;(2BA0+4*(Sector-1))=sector-1
+1521 : 2A CF 2F 	"* /"		lhld	$2FCF   ;sector offset
+1524 : 26 00 		"& "		mvi	h,$00
+1526 : 01 A1 2B 	"  +"		lxi	b,$2BA1 ;
+1529 : 09 		" "		dad	b
+152A : 3A AC 2F 	": /"		lda	$2FAC   ;(2BA1+4*(Sector-1))=(2FAC)
+152D : 77 		"w"		mov	m,a
+152E : 2A CF 2F 	"* /"		lhld	$2FCF   ;
+1531 : 26 00 		"& "		mvi	h,$00
+1533 : 03 		" "		inx	b       ;2BA2
+1534 : 09 		" "		dad	b
+1535 : 3A CE 2F 	": /"		lda	$2FCE   ;sector
+1538 : 77 		"w"		mov	m,a
+1539 : 2A CF 2F 	"* /"		lhld	$2FCF   ;
+153C : 26 00 		"& "		mvi	h,$00
+153E : 03 		" "		inx	b       ;2BA3
+153F : 09 		" "		dad	b
+1540 : 36 00 		"6 "		mvi	m,$00
+1542 : 3A CE 2F 	": /"		lda	$2FCE
+1545 : 3C 		"<"		inr	a       ;Next sector
+1546 : 32 CE 2F 	"2 /"		sta	$2FCE
+1549 : C2 FF 14 	"   "		jnz	L14FF   ;loop
+
+                                ;created data for 26 sectors
+                                
+154C				L154C:
+154C : C3 A1 15 	"   "		jmp	L15A1   ;ret
+
+				;create data for 8 sectors
+                                
+154F				L154F:
+154F : 21 CE 2F 	"! /"		lxi	h,$2FCE	;set 1st sector
+1552 : 36 01 		"6 "		mvi	m,$01
+1554				L1554:
+1554 : 3E 08 		"> "		mvi	a,$08   ;last sector
+1556 : 21 CE 2F 	"! /"		lxi	h,$2FCE
+1559 : BE 		" "		cmp	m
+155A : DA A1 15 	"   "		jc	L15A1	;ret
+
+155D : 3A CE 2F 	": /"		lda	$2FCE	;
+1560 : 3D 		"="		dcr	a
+1561 : 6F 		"o"		mov	l,a	
+1562 : 26 00 		"& "		mvi	h,$00
+1564 : 29 		")"		dad	h
+1565 : 29 		")"		dad	h
+1566 : EB 		" "		xchg		;E=4*A-1
+1567 : 21 CF 2F 	"! /"		lxi	h,$2FCF	;
+156A : 73 		"s"		mov	m,e	;
+156B : 4E 		"N"		mov	c,m	;
+156C : 06 00 		"  "		mvi	b,$00
+156E : 21 A0 2B 	"! +"		lxi	h,$2BA0	;
+1571 : 09 		" "		dad	b	
+1572 : 3A B8 2F 	": /"		lda	$2FB8	;
+1575 : 77 		"w"		mov	m,a
+1576 : 2A CF 2F 	"* /"		lhld	$2FCF
+1579 : 26 00 		"& "		mvi	h,$00
+157B : 01 A1 2B 	"  +"		lxi	b,$2BA1
+157E : 09 		" "		dad	b
+157F : 3A AC 2F 	": /"		lda	$2FAC
+1582 : 77 		"w"		mov	m,a
+1583 : 2A CF 2F 	"* /"		lhld	$2FCF
+1586 : 26 00 		"& "		mvi	h,$00
+1588 : 03 		" "		inx	b
+1589 : 09 		" "		dad	b
+158A : 3A CE 2F 	": /"		lda	$2FCE
+158D : 77 		"w"		mov	m,a
+158E : 2A CF 2F 	"* /"		lhld	$2FCF
+1591 : 26 00 		"& "		mvi	h,$00
+1593 : 03 		" "		inx	b
+1594 : 09 		" "		dad	b
+1595 : 36 03 		"6 "		mvi	m,$03
+1597 : 3A CE 2F 	": /"		lda	$2FCE
+159A : 3C 		"<"		inr	a
+159B : 32 CE 2F 	"2 /"		sta	$2FCE
+159E : C2 54 15 	" T "		jnz	L1554
+15A1				L15A1:
+15A1 : C9 		" "		ret
+
+				;----------------------------------
+				;commands 0,1,5,7 error
+				;----------------------------------
+				
+15A2				L15A2:
+15A2 : 21 00 00 	"!  "		lxi	h,L0000	;upper 32K RAM
+15A5 : 36 FE 		"6 "		mvi	m,$FE
+15A7 : 21 11 11 	"!  "		lxi	h,$1111	;Result command not initialized?
+15AA : 22 21 FF 	""! "		shld	$FF21
+15AD : 21 23 FF 	"!# "		lxi	h,$FF23	
+15B0 : 36 00 		"6 "		mvi	m,$00	;Ready
+15B2 : C9 		" "		ret
+
+				;----------------------------------
+				;PASS 0 execute new command
+				;----------------------------------
+				
+15B3				L15B3:
+15B3 : 21 00 00 	"!  "		lxi	h,L0000	;Select upper 32K RAM
+15B6 : 36 FE 		"6 "		mvi	m,$FE
+15B8 : 21 A8 2F 	"! /"		lxi	h,$2FA8	;DMA directon
+15BB : 36 80 		"6 "		mvi	m,$80	;Read from CPU RAM
+15BD : 01 07 00 	"   "		lxi	b,$0007	;size of disk structure
+15C0 : C5 		" "		push	b	;stack structure size
+15C1 : 2A 21 FF 	"*! "		lhld	$FF21	;Get CPU addr of disk structure
+15C4 : 44 		"D"		mov	b,h	;BC = pointer disk structure
+15C5 : 4D 		"M"		mov	c,l	;
+15C6 : 11 B5 2F 	"  /"		lxi	d,$2FB5	;disk structure var - sector size
+15C9 : CD B7 10 	"   "		call	L10B7	;MemCopy
+15CC : 3A B6 2F 	": /"		lda	$2FB6	;get command
+15CF : E6 07 		"  "		ani	$07	;drop non command bits
+15D1 : F5 		" "		push	psw	;save it
+15D2 : 3A B6 2F 	": /"		lda	$2FB6	;get drive
+15D5 : E6 FC 		"  "		ani	$FC	;remove command bits
+15D7 : 1F 		" "		rar		;shift drive number
+15D8 : 1F 		" "		rar
+15D9 : 1F 		" "		rar
+15DA : E6 18 		"  "		ani	$18	;drive number * 8
+15DC : C1 		" "		pop	b	;get command
+15DD : 48 		"H"		mov	c,b	;command
+15DE : 81 		" "		add	c	;8* drive+command
+15DF : 32 AD 2F 	"2 /"		sta	$2FAD	;8* drive+command
+15E2 : 2A AD 2F 	"* /"		lhld	$2FAD
+15E5 : 4D 		"M"		mov	c,l	;table index
+15E6 : 06 00 		"  "		mvi	b,$00
+15E8 : 21 52 16 	"!R "		lxi	h,$1652	;table
+15EB : 09 		" "		dad	b
+15EC : 09 		" "		dad	b
+15ED : 5E 		"^"		mov	e,m	;get table entry
+15EE : 23 		"#"		inx	h
+15EF : 56 		"V"		mov	d,m
+15F0 : EB 		" "		xchg
+15F1 : E9 		" "		pchl		;execute command for drive
+
+				;Drive A command 0
+				
+15F2 : CD A2 15 	"   "		call	L15A2	;error
+15F5 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 1
+				
+15F8 : CD A2 15 	"   "		call	L15A2	;error	
+15FB : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 2
+				
+15FE : CD C1 14 	"   "		call	L14C1	;format
+1601 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 3
+				
+1604 : CD 4B 13 	" K "		call	L134B	;Recalibrate
+1607 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 4
+				
+160A : CD F4 13 	"   "		call	L13F4	;Read sector
+160D : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 5
+				
+1610 : CD A2 15 	"   "		call	L15A2	;error
+1613 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 6
+				
+1616 : CD 28 14 	" ( "		call	L1428	;Write sector
+1619 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive A command 7
+				
+161C : CD A2 15 	"   "		call	L15A2	;error
+161F : C3 72 16 	" r "		jmp	L1672
+
+				;Drive B command 0
+				
+1622 : CD A2 15 	"   "		call	L15A2	;error
+1625 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive B command 1
+				
+1628 : CD 96 14 	"   "		call	L1496	;read buffer
+162B : C3 72 16 	" r "		jmp	L1672
+
+				;Drive B command 2
+				
+162E : CD 6B 14 	" k "		call	L146B	;format
+1631 : C3 72 16 	" r "		jmp	L1672
+
+				;Drive B command 3
+1634 : CD A2 15 	"   "		call	L15A2	;error
+1637 : C3 72 16 	" r "		jmp	L1672
+				;Drive B command 4
+163A : CD 0E 14 	"   "		call	L140E
+163D : C3 72 16 	" r "		jmp	L1672
+				;Drive B command 5
+1640 : CD A2 15 	"   "		call	L15A2	;error
+1643 : C3 72 16 	" r "		jmp	L1672
+				;Drive B command 6
+1646 : CD 51 14 	" Q "		call	L1451
+1649 : C3 72 16 	" r "		jmp	L1672
+				;Drive B command 7
+164C : CD A2 15 	"   "		call	L15A2	;error
+164F : C3 72 16 	" r "		jmp	L1672
+
+				;disk command addr table 
+				
+				L1652:	15F2
+					15F8
+					15FE
+					1604
+					160A
+					1610
+					1616
+					161C
+					1622
+					1628
+					162E
+					1634
+					163A
+					1640
+					1646
+					164C
+
+1672				L1672:
+1672 : C9 		" "		ret
+
+				;------------------------
+				;Read/write Sector data
+				;------------------------
+				
+1673				L1673:
+1673 : 3E 02 		"> "		mvi	a,$02	;signal ..
+1675 : D3 53 		" S"		out	$53
+1677 : CD 3B 10 	" ; "		call	L103B	;Set DMA
+167A : 3A A8 2F 	": /"		lda	$2FA8	;DMA directon	
+167D : FE 40 		" @"		cpi	$40	;test read sector
+167F : C2 8E 16 	"   "		jnz	L168E	;do write sector
+
+				;read sector
+				
+1682 : 3A A7 2F 	": /"		lda	$2FA7	;MT MF
+1685 : C6 06 		"  "		adi	$06	;Read FDD command
+1687 : 4F 		"O"		mov	c,a
+1688 : CD 16 10 	"   "		call	L1016	;Write FDC data
+168B : C3 97 16 	"   "		jmp	L1697
+
+				;write sector
+				
+168E				L168E:
+168E : 3A A7 2F 	": /"		lda	$2FA7	;MT MF
+1691 : C6 05 		"  "		adi	$05	;Write FDD command
+1693 : 4F 		"O"		mov	c,a
+1694 : CD 16 10 	"   "		call	L1016	;Write FDC data
+
+				;read/write sector
+				
+1697				L1697:
+1697 : 2A AC 2F 	"* /"		lhld	$2FAC	;
+169A : 26 00 		"& "		mvi	h,$00
+169C : 29 		")"		dad	h
+169D : 29 		")"		dad	h
+169E : E5 		" "		push	h	;4*
+169F : 2A A6 2F 	"* /"		lhld	$2FA6	;drive
+16A2 : 26 00 		"& "		mvi	h,$00	;
+16A4 : C1 		" "		pop	b
+16A5 : 09 		" "		dad	b
+16A6 : 4D 		"M"		mov	c,l	;drive
+16A7 : CD 16 10 	"   "		call	L1016	;Write FDC data
+16AA : CD 87 10 	"   "		call	L1087	;sector command data
+16AD : 21 AB 2F 	"! /"		lxi	h,$2FAB	;
+16B0 : 36 00 		"6 "		mvi	m,$00
+16B2 : 2B 		"+"		dcx	h	;2FAA
+16B3 : 36 02 		"6 "		mvi	m,$02	;state 2
+16B5 : C9 		" "		ret
+
+				;------------------------
+				;sector command in progress
+				
+16B6				L16B6:
+16B6 : CD 34 12 	" 4 "		call	L1234	;read Bit 5 port C
+16B9 : 1F 		" "		rar
+16BA : D2 98 17 	"   "		jnc	L1798	;ret
+
+16BD : 0E 07 		"  "		mvi	c,$07	;
+16BF : CD 44 12 	" D "		call	L1244	;Read multiple FDD data
+16C2 : 3A A8 2F 	": /"		lda	$2FA8	;DMA directon
+16C5 : D6 40 		" @"		sui	$40	;Test data to CPU-RAM
+16C7 : D6 01 		"  "		sui	$01	;
+16C9 : 9F 		" "		sbb	a	;FF Data to CPU-RAM
+16CA : F5 		" "		push	psw
+16CB : 3A A2 2F 	": /"		lda	$2FA2	;Drive
+16CE : D6 00 		"  "		sui	$00	;Test Drive
+16D0 : D6 01 		"  "		sui	$01	;
+16D2 : 9F 		" "		sbb	a	;FF for Drive A
+16D3 : C1 		" "		pop	b
+16D4 : 48 		"H"		mov	c,b
+16D5 : A1 		" "		ana	c
+16D6 : 1F 		" "		rar
+16D7 : D2 E8 16 	"   "		jnc	L16E8	;Not Read from Drive A
+
+				;read from drive A
+				
+16DA : 2A A0 2F 	"* /"		lhld	$2FA0	;DMA length
+16DD : E5 		" "		push	h
+16DE : 2A BA 2F 	"* /"		lhld	$2FBA	;
+16E1 : EB 		" "		xchg
+16E2 : 01 A0 2B 	"  +"		lxi	b,$2BA0	;
+16E5 : CD B7 10 	"   "		call	L10B7	;MemCopy
+
+16E8				L16E8:
+16E8 : 3A AD 2F 	": /"		lda	$2FAD	;8* drive+command
+16EB : D6 04 		"  "		sui	$04
+16ED : C6 FF 		"  "		adi	$FF
+16EF : 9F 		" "		sbb	a
+16F0 : F5 		" "		push	psw
+16F1 : 3A AD 2F 	": /"		lda	$2FAD	;8* drive+command
+16F4 : D6 06 		"  "		sui	$06
+16F6 : C6 FF 		"  "		adi	$FF
+16F8 : 9F 		" "		sbb	a
+16F9 : C1 		" "		pop	b
+16FA : 48 		"H"		mov	c,b
+16FB : A1 		" "		ana	c
+16FC : 1F 		" "		rar
+16FD : D2 06 17 	"   "		jnc	L1706
+
+1700 : CD 7B 12 	" { "		call	L127B	;Disk result
+1703 : C3 98 17 	"   "		jmp	L1798	;ret
+
+				;--
+				
+1706				L1706:
+1706 : 3A AE 2F 	": /"		lda	$2FAE
+1709 : D6 40 		" @"		sui	$40
+170B : 9F 		" "		sbb	a
+170C : 2F 		"/"		cma
+170D : F5 		" "		push	psw
+170E : 3A B7 2F 	": /"		lda	$2FB7
+1711 : D6 01 		"  "		sui	$01
+1713 : D6 01 		"  "		sui	$01
+1715 : 9F 		" "		sbb	a
+1716 : C1 		" "		pop	b
+1717 : 48 		"H"		mov	c,b
+1718 : B1 		" "		ora	c
+1719 : 1F 		" "		rar
+171A : D2 23 17 	" # "		jnc	L1723
+
+171D : CD 7B 12 	" { "		call	L127B	;Disk result
+1720 : C3 98 17 	"   "		jmp	L1798	;ret
+				;
+1723				L1723:
+1723 : 2A A0 2F 	"* /"		lhld	$2FA0	;DMA length
+1726 : EB 		" "		xchg
+1727 : 2A BA 2F 	"* /"		lhld	$2FBA
+172A : 19 		" "		dad	d
+172B : 22 BA 2F 	"" /"		shld	$2FBA
+172E : 3A B7 2F 	": /"		lda	$2FB7
+1731 : 3D 		"="		dcr	a
+1732 : 32 B7 2F 	"2 /"		sta	$2FB7
+1735 : 3A A9 2F 	": /"		lda	$2FA9	;SD
+1738 : 1F 		" "		rar
+1739 : D2 5A 17 	" Z "		jnc	L175A	;MFM
+
+173C : 3A B9 2F 	": /"		lda	$2FB9
+173F : FE 1A 		"  "		cpi	$1A
+1741 : D2 4E 17 	" N "		jnc	L174E
+1744 : 3A B9 2F 	": /"		lda	$2FB9
+1747 : 3C 		"<"		inr	a
+1748 : 32 B9 2F 	"2 /"		sta	$2FB9
+174B : C3 57 17 	" W "		jmp	L1757
+				;
+174E				L174E:
+174E : 21 B9 2F 	"! /"		lxi	h,$2FB9
+1751 : 36 01 		"6 "		mvi	m,$01
+1753 : 2B 		"+"		dcx	h
+1754 : 7E 		"~"		mov	a,m
+1755 : 3C 		"<"		inr	a
+1756 : 77 		"w"		mov	m,a
+1757				L1757:
+1757 : C3 87 17 	"   "		jmp	L1787
+				;
+175A				L175A:
+175A : 2A B8 2F 	"* /"		lhld	$2FB8
+175D : 26 00 		"& "		mvi	h,$00
+175F : 29 		")"		dad	h
+1760 : E5 		" "		push	h
+1761 : 2A AC 2F 	"* /"		lhld	$2FAC
+1764 : 26 00 		"& "		mvi	h,$00
+1766 : C1 		" "		pop	b
+1767 : 09 		" "		dad	b
+1768 : EB 		" "		xchg
+1769 : 21 B8 2F 	"! /"		lxi	h,$2FB8
+176C : 73 		"s"		mov	m,e
+176D : 23 		"#"		inx	h
+176E : 7E 		"~"		mov	a,m
+176F : FE 08 		"  "		cpi	$08
+1771 : D2 7E 17 	" ~ "		jnc	L177E
+1774 : 3A B9 2F 	": /"		lda	$2FB9
+1777 : 3C 		"<"		inr	a
+1778 : 32 B9 2F 	"2 /"		sta	$2FB9
+177B : C3 87 17 	"   "		jmp	L1787
+				;
+177E				L177E:
+177E : 21 B9 2F 	"! /"		lxi	h,$2FB9
+1781 : 36 01 		"6 "		mvi	m,$01
+1783 : 2B 		"+"		dcx	h
+1784 : 7E 		"~"		mov	a,m
+1785 : 3C 		"<"		inr	a
+1786 : 77 		"w"		mov	m,a
+1787				L1787:
+1787 : 3A AD 2F 	": /"		lda	$2FAD	;8* drive+command
+178A : FE 06 		"  "		cpi	$06
+178C : C2 95 17 	"   "		jnz	L1795
+178F : CD 28 14 	" ( "		call	L1428
+1792 : C3 98 17 	"   "		jmp	L1798	;ret
+				;
+1795				L1795:
+1795 : CD F4 13 	"   "		call	L13F4
+
+1798				L1798:
+1798 : C9 		" "		ret
+
+				;------------------------
+				;seek
+				
+1799				L1799:
+1799 : CD 34 12 	" 4 "		call	L1234	;read Bit 5 port C
+179C : 1F 		" "		rar
+179D : D2 A6 17 	"   "		jnc	L17A6	;return FDD busy ?
+
+17A0 : CD 70 12 	" p "		call	L1270	;Sense status
+17A3 : CD 7B 12 	" { "		call	L127B	;Disk result
+
+17A6				L17A6:
+17A6 : C9 		" "		ret
+
+				;-----------------------
+				;Seek complete?
+				
+17A7				L17A7:
+17A7 : CD 34 12 	" 4 "		call	L1234	;read Bit 5 port C
+17AA : 1F 		" "		rar
+17AB : D2 C4 17 	"   "		jnc	L17C4	;ret
+
+17AE : CD 70 12 	" p "		call	L1270	;Sense status
+17B1 : 3A AE 2F 	": /"		lda	$2FAE
+17B4 : FE 40 		" @"		cpi	$40	;
+17B6 : DA BF 17 	"   "		jc	L17BF
+
+17B9 : CD 7B 12 	" { "		call	L127B	;Disk result
+17BC : C3 C4 17 	"   "		jmp	L17C4
+				;
+17BF				L17BF:
+17BF : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+17C2 : 36 01 		"6 "		mvi	m,$01
+17C4				L17C4:
+17C4 : C9 		" "		ret
+
+				;-------------------------
+				;
+				
+17C5				L17C5:
+17C5 : CD 34 12 	" 4 "		call	L1234	;read Bit 5 port C
+17C8 : 1F 		" "		rar
+17C9 : D2 E2 17 	"   "		jnc	L17E2   ;ret
+
+17CC : CD 70 12 	" p "		call	L1270	;Sense status
+17CF : 3A AE 2F 	": /"		lda	$2FAE	;status buffer
+17D2 : FE 40 		" @"		cpi	$40	;test write protect
+17D4 : DA DD 17 	"   "		jc	L17DD	;Not write protected
+
+				;Terminate command
+				
+17D7 : CD 7B 12 	" { "		call	L127B	;Disk result
+17DA : C3 E2 17 	"   "		jmp	L17E2	;ret
+				;
+17DD				L17DD:
+17DD : 21 AA 2F 	"! /"		lxi	h,$2FAA	;Disk State
+17E0 : 36 06 		"6 "		mvi	m,$06	;write?
+17E2				L17E2:
+17E2 : C9 		" "		ret
+
+				;-----------------------------------
+				;Format Track ?
+				;-----------------------------------
+                                
+17E3				L17E3:
+17E3 : 3A A9 2F 	": /"		lda	$2FA9	;Single Desnsity
+17E6 : 1F 		" "		rar
+17E7 : D2 F3 17 	"   "		jnc	L17F3	;jmp MFM 
+
+17EA : 21 68 00 	"!h "		lxi	h,$0068	;For FM
+17ED : 22 A0 2F 	"" /"		shld	$2FA0	;DMA length
+17F0 : C3 F9 17 	"   "		jmp	L17F9	
+				;
+17F3				L17F3:
+17F3 : 21 20 00 	"!  "		lxi	h,$0020
+17F6 : 22 A0 2F 	"" /"		shld	$2FA0	;DMA length
+
+17F9				L17F9:
+17F9 : CD 3B 10 	" ; "		call	L103B	;Set DMA
+17FC : 3A A7 2F 	": /"		lda	$2FA7	;MT MF
+17FF : C6 0D 		"  "		adi	$0D	;Write ID (format Write)
+1801 : 4F 		"O"		mov	c,a
+1802 : CD 16 10 	"   "		call	L1016	;Write FDC data
+1805 : 2A AC 2F 	"* /"		lhld	$2FAC
+1808 : 26 00 		"& "		mvi	h,$00
+180A : 29 		")"		dad	h
+180B : 29 		")"		dad	h
+180C : E5 		" "		push	h
+180D : 2A A6 2F 	"* /"		lhld	$2FA6
+1810 : 26 00 		"& "		mvi	h,$00
+1812 : C1 		" "		pop	b
+1813 : 09 		" "		dad	b
+1814 : 4D 		"M"		mov	c,l
+1815 : CD 16 10 	"   "		call	L1016	;Write FDC data
+1818 : 3A A9 2F 	": /"		lda	$2FA9	;SD
+181B : 1F 		" "		rar
+181C : D2 2A 18 	" * "		jnc	L182A	;MFM
+				;FM
+181F : 1E 04 		"  "		mvi	e,$04
+1821 : 01 0E 10 	"   "		lxi	b,$100E
+1824 : CD 59 10 	" Y "		call	L1059	;Write E bytes of FDD data at BC
+1827 : C3 32 18 	" 2 "		jmp	L1832
+
+				;MFM
+				
+182A				L182A:
+182A : 1E 04 		"  "		mvi	e,$04
+182C : 01 12 10 	"   "		lxi	b,$1012
+182F : CD 59 10 	" Y "		call	L1059	;Write E bytes of FDD data at BC
+1832				L1832:
+1832 : 21 AB 2F 	"! /"		lxi	h,$2FAB	;
+1835 : 36 00 		"6 "		mvi	m,$00
+1837 : 2B 		"+"		dcx	h
+1838 : 36 02 		"6 "		mvi	m,$02	;
+183A : C9 		" "		ret
+
+				;-------------------------
+				;device B disk I/O handler
+				;-------------------------
+				
+183B				L183B:
+183B : 2A AA 2F 	"* /"		lhld	$2FAA	;Disk State
+183E : 4D 		"M"		mov	c,l	;get State
+183F : 06 00 		"  "		mvi	b,$00
+1841 : 21 75 18 	"!u "		lxi	h,$1875	;addr table
+1844 : 09 		" "		dad	b
+1845 : 09 		" "		dad	b
+1846 : 5E 		"^"		mov	e,m	;get addr
+1847 : 23 		"#"		inx	h
+1848 : 56 		"V"		mov	d,m
+1849 : EB 		" "		xchg		;
+184A : E9 		" "		pchl		;execute state handler
+
+				;0 accept new command
+				
+184B : CD B3 15 	"   "		call	L15B3	
+184E : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;1 Drive Selected, send Sector command
+				
+1851 : CD 73 16 	" s "		call	L1673
+1854 : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;2 sector command in progress
+				
+1857 : CD B6 16 	"   "		call	L16B6
+185A : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;3 recalibrate in progress
+				
+185D : CD 99 17 	"   "		call	L1799
+1860 : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;4 Seek in progress
+				
+1863 : CD A7 17 	"   "		call	L17A7
+1866 : C3 83 18 	"   "		jmp	L1883   ;disk exit
+				;5
+1869 : CD C5 17 	"   "		call	L17C5	;test write protect ?
+186C : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;6 Format Track ?
+				
+186F : CD E3 17 	"   "		call	L17E3
+1872 : C3 83 18 	"   "		jmp	L1883   ;disk exit
+
+				;--------------------
+				;pass addr table
+				;--------------------
+				
+1875 : 					dw	L184B ;0 execute new command
+1877 : 					dw	L1851 ;1 Sector command
+1879 : 					dw	L1857 ;2
+187B : 					dw	L185D ;3
+187D : 					dw	L1863 ;4
+187F : 					dw	L1869 ;5
+1881 : 					dw	L186F ;6
+
+				;---------------------------
+				;disk exit
+				;---------------------------
+				
+1883				L1883:
+1883 : 21 00 00 	"!  "		lxi	h,L0000
+1886 : 36 FE 		"6 "		mvi	m,$FE
+1888 : C9 		" "		ret
+
+				;---------------------------
+				;Multiply HL=HL*DE
+				;---------------------------
+				
+1889				L1889:
+1889 : 44 		"D"		mov	b,h
+188A : 4D 		"M"		mov	c,l	
+188B : 21 00 00 	"!  "		lxi	h,L0000	;Result
+188E : 3E 10 		"> "		mvi	a,$10	;16 bit devision
+1890				L1890:
+1890 : F5 		" "		push	psw
+1891 : 29 		")"		dad	h	;Result HL<<2
+1892 : EB 		" "		xchg
+1893 : 97 		" "		sub	a	;DE<<2
+1894 : 29 		")"		dad	h
+1895 : EB 		" "		xchg
+1896 : 8D 		" "		adc	l	
+1897 : 91 		" "		sub	c	
+1898 : 6F 		"o"		mov	l,a
+1899 : 7C 		"|"		mov	a,h
+189A : 98 		" "		sbb	b	;HL-BC
+189B : 67 		"g"		mov	h,a
+189C : 13 		" "		inx	d	
+189D : D2 A2 18 	"   "		jnc	L18A2
+
+18A0 : 09 		" "		dad	b	;HL+2
+18A1 : 1B 		" "		dcx	d	;
+18A2				L18A2:
+18A2 : F1 		" "		pop	psw
+18A3 : 3D 		"="		dcr	a
+18A4 : C2 90 18 	"   "		jnz	L1890
+18A7 : C9 		" "		ret
+				;
+18A8 : 5E 		"^"		mov	e,m
+18A9 : 23 		"#"		inx	h
+18AA : 56 		"V"		mov	d,m
+18AB : EB 		" "		xchg
+
+				;Shift left HL << C 
+				
+18AC				L18AC:
+18AC : 29 		")"		dad	h
+18AD : 0D 		" "		dcr	c
+18AE : C2 AC 18 	"   "		jnz	L18AC
+18B1 : C9 		" "		ret
+				;
+18B2 : 5F 		"_"		mov	e,a
+18B3 : 16 00 		"  "		mvi	d,$00
+
+				;---------------------
+				;Substract HL=DE-HL
+				;---------------------
+				
+18B5				L18B5:
+18B5 : 7B 		"{"		mov	a,e
+18B6 : 95 		" "		sub	l
+18B7 : 6F 		"o"		mov	l,a
+18B8 : 7A 		"z"		mov	a,d
+18B9 : 9C 		" "		sbb	h
+18BA : 67 		"g"		mov	h,a
+18BB : C9 		" "		ret
+				;
+18BC				L18BC:
+18BC : 69 		"i"		mov	l,c
+18BD : 60 		"`"		mov	h,b
+18BE : 4E 		"N"		mov	c,m
+18BF : 23 		"#"		inx	h
+18C0 : 46 		"F"		mov	b,m
+
+				;----------------------------
+				;Subtract HL = WORD(DE)-BC
+				;----------------------------
+				
+18C1				L18C1:
+18C1 : 1A 		" "		ldax	d	;*LSB
+18C2 : 91 		" "		sub	c	
+18C3 : 6F 		"o"		mov	l,a
+18C4 : 13 		" "		inx	d
+18C5 : 1A 		" "		ldax	d
+18C6 : 98 		" "		sbb	b
+18C7 : 67 		"g"		mov	h,a
+18C8 : C9 		" "		ret
+
+				;----------------------------
+				
+18C9 : 5F 		"_"		mov	e,a
+18CA : 16 00 		"  "		mvi	d,$00
+
+				;----------------------------
+				;Substract HL=DE-WORD(HL)
+				;----------------------------
+				
+18CC				L18CC:
+18CC : 7B 		"{"		mov	a,e
+18CD : 96 		" "		sub	m
+18CE : 5F 		"_"		mov	e,a
+18CF : 7A 		"z"		mov	a,d
+18D0 : 23 		"#"		inx	h
+18D1 : 9E 		" "		sbb	m
+18D2 : 57 		"W"		mov	d,a
+18D3 : EB 		" "		xchg
+18D4 : C9 		" "		ret
+
+				;Delay
+				
+18D5				L18D5:
+18D5 : 06 0C 		"  "		mvi	b,$0C
+18D7				L18D7:
+18D7 : 48 		"H"		mov	c,b
+18D8				L18D8:
+18D8 : 0D 		" "		dcr	c
+18D9 : C2 D8 18 	"   "		jnz	L18D8
+18DC : 3D 		"="		dcr	a
+18DD : C2 D7 18 	"   "		jnz	L18D7
+18E0 : C9 		" "		ret
+
+				;Delay
+				
+18E1 : FF 		" "		rst	7
+18E2 : FF 		" "		rst	7
+18E3 : FF 		" "		rst	7
+18E4 : FF 		" "		rst	7
+18E5 : FF 		" "		rst	7
+18E6 : FF 		" "		rst	7
+18E7 : FF 		" "		rst	7
+18E8 : FF 		" "		rst	7
+18E9 : FF 		" "		rst	7
+18EA : FF 		" "		rst	7
+18EB : FF 		" "		rst	7
+18EC : FF 		" "		rst	7
+18ED : FF 		" "		rst	7
+18EE : FF 		" "		rst	7
+18EF : FF 		" "		rst	7
+18F0 : FF 		" "		rst	7
+18F1 : FF 		" "		rst	7
+18F2 : FF 		" "		rst	7
+18F3 : FF 		" "		rst	7
+18F4 : FF 		" "		rst	7
+18F5 : FF 		" "		rst	7
+18F6 : FF 		" "		rst	7
+18F7 : FF 		" "		rst	7
+18F8 : FF 		" "		rst	7
+18F9 : FF 		" "		rst	7
+18FA : FF 		" "		rst	7
+18FB : FF 		" "		rst	7
+18FC : FF 		" "		rst	7
+18FD : FF 		" "		rst	7
+18FE : FF 		" "		rst	7
+18FF : FF 		" "		rst	7
+1900 : FF 		" "		rst	7
+1901 : FF 		" "		rst	7
+1902 : FF 		" "		rst	7
+1903 : FF 		" "		rst	7
+1904 : FF 		" "		rst	7
+1905 : FF 		" "		rst	7
+1906 : FF 		" "		rst	7
+1907 : FF 		" "		rst	7
+1908 : FF 		" "		rst	7
+1909 : FF 		" "		rst	7
+190A : FF 		" "		rst	7
+190B : FF 		" "		rst	7
+190C : FF 		" "		rst	7
+190D : FF 		" "		rst	7
+190E : FF 		" "		rst	7
+190F : FF 		" "		rst	7
+1910 : FF 		" "		rst	7
+1911 : FF 		" "		rst	7
+1912 : FF 		" "		rst	7
+1913 : FF 		" "		rst	7
+1914 : FF 		" "		rst	7
+1915 : FF 		" "		rst	7
+1916 : FF 		" "		rst	7
+1917 : FF 		" "		rst	7
+1918 : FF 		" "		rst	7
+1919 : FF 		" "		rst	7
+191A : FF 		" "		rst	7
+191B : FF 		" "		rst	7
+191C : FF 		" "		rst	7
+191D : FF 		" "		rst	7
+191E : FF 		" "		rst	7
+191F : FF 		" "		rst	7
+1920 : FF 		" "		rst	7
+1921 : FF 		" "		rst	7
+1922 : FF 		" "		rst	7
+1923 : FF 		" "		rst	7
+1924 : FF 		" "		rst	7
+1925 : FF 		" "		rst	7
+1926 : FF 		" "		rst	7
+1927 : FF 		" "		rst	7
+1928 : FF 		" "		rst	7
+1929 : FF 		" "		rst	7
+192A : FF 		" "		rst	7
+192B : FF 		" "		rst	7
+192C : FF 		" "		rst	7
+192D : FF 		" "		rst	7
+192E : FF 		" "		rst	7
+192F : FF 		" "		rst	7
+1930 : FF 		" "		rst	7
+1931 : FF 		" "		rst	7
+1932 : FF 		" "		rst	7
+1933 : FF 		" "		rst	7
+1934 : FF 		" "		rst	7
+1935 : FF 		" "		rst	7
+1936 : FF 		" "		rst	7
+1937 : FF 		" "		rst	7
+1938 : FF 		" "		rst	7
+1939 : FF 		" "		rst	7
+193A : FF 		" "		rst	7
+193B : FF 		" "		rst	7
+193C : FF 		" "		rst	7
+193D : FF 		" "		rst	7
+193E : FF 		" "		rst	7
+193F : FF 		" "		rst	7
+1940 : FF 		" "		rst	7
+1941 : FF 		" "		rst	7
+1942 : FF 		" "		rst	7
+1943 : FF 		" "		rst	7
+1944 : FF 		" "		rst	7
+1945 : FF 		" "		rst	7
+1946 : FF 		" "		rst	7
+1947 : FF 		" "		rst	7
+1948 : FF 		" "		rst	7
+1949 : FF 		" "		rst	7
+194A : FF 		" "		rst	7
+194B : FF 		" "		rst	7
+194C : FF 		" "		rst	7
+194D : FF 		" "		rst	7
+194E : FF 		" "		rst	7
+194F : FF 		" "		rst	7
+1950 : FF 		" "		rst	7
+1951 : FF 		" "		rst	7
+1952 : FF 		" "		rst	7
+1953 : FF 		" "		rst	7
+1954 : FF 		" "		rst	7
+1955 : FF 		" "		rst	7
+1956 : FF 		" "		rst	7
+1957 : FF 		" "		rst	7
+1958 : FF 		" "		rst	7
+1959 : FF 		" "		rst	7
+195A : FF 		" "		rst	7
+195B : FF 		" "		rst	7
+195C : FF 		" "		rst	7
+195D : FF 		" "		rst	7
+195E : FF 		" "		rst	7
+195F : FF 		" "		rst	7
+1960 : FF 		" "		rst	7
+1961 : FF 		" "		rst	7
+1962 : FF 		" "		rst	7
+1963 : FF 		" "		rst	7
+1964 : FF 		" "		rst	7
+1965 : FF 		" "		rst	7
+1966 : FF 		" "		rst	7
+1967 : FF 		" "		rst	7
+1968 : FF 		" "		rst	7
+1969 : FF 		" "		rst	7
+196A : FF 		" "		rst	7
+196B : FF 		" "		rst	7
+196C : FF 		" "		rst	7
+196D : FF 		" "		rst	7
+196E : FF 		" "		rst	7
+196F : FF 		" "		rst	7
+1970 : FF 		" "		rst	7
+1971 : FF 		" "		rst	7
+1972 : FF 		" "		rst	7
+1973 : FF 		" "		rst	7
+1974 : FF 		" "		rst	7
+1975 : FF 		" "		rst	7
+1976 : FF 		" "		rst	7
+1977 : FF 		" "		rst	7
+1978 : FF 		" "		rst	7
+1979 : FF 		" "		rst	7
+197A : FF 		" "		rst	7
+197B : FF 		" "		rst	7
+197C : FF 		" "		rst	7
+197D : FF 		" "		rst	7
+197E : FF 		" "		rst	7
+197F : FF 		" "		rst	7
+1980 : FF 		" "		rst	7
+1981 : FF 		" "		rst	7
+1982 : FF 		" "		rst	7
+1983 : FF 		" "		rst	7
+1984 : FF 		" "		rst	7
+1985 : FF 		" "		rst	7
+1986 : FF 		" "		rst	7
+1987 : FF 		" "		rst	7
+1988 : FF 		" "		rst	7
+1989 : FF 		" "		rst	7
+198A : FF 		" "		rst	7
+198B : FF 		" "		rst	7
+198C : FF 		" "		rst	7
+198D : FF 		" "		rst	7
+198E : FF 		" "		rst	7
+198F : FF 		" "		rst	7
+1990 : FF 		" "		rst	7
+1991 : FF 		" "		rst	7
+1992 : FF 		" "		rst	7
+1993 : FF 		" "		rst	7
+1994 : FF 		" "		rst	7
+1995 : FF 		" "		rst	7
+1996 : FF 		" "		rst	7
+1997 : FF 		" "		rst	7
+1998 : FF 		" "		rst	7
+1999 : FF 		" "		rst	7
+199A : FF 		" "		rst	7
+199B : FF 		" "		rst	7
+199C : FF 		" "		rst	7
+199D : FF 		" "		rst	7
+199E : FF 		" "		rst	7
+199F : FF 		" "		rst	7
+19A0 : FF 		" "		rst	7
+19A1 : FF 		" "		rst	7
+19A2 : FF 		" "		rst	7
+19A3 : FF 		" "		rst	7
+19A4 : FF 		" "		rst	7
+19A5 : FF 		" "		rst	7
+19A6 : FF 		" "		rst	7
+19A7 : FF 		" "		rst	7
+19A8 : FF 		" "		rst	7
+19A9 : FF 		" "		rst	7
+19AA : FF 		" "		rst	7
+19AB : FF 		" "		rst	7
+19AC : FF 		" "		rst	7
+19AD : FF 		" "		rst	7
+19AE : FF 		" "		rst	7
+19AF : FF 		" "		rst	7
+19B0 : FF 		" "		rst	7
+19B1 : FF 		" "		rst	7
+19B2 : FF 		" "		rst	7
+19B3 : FF 		" "		rst	7
+19B4 : FF 		" "		rst	7
+19B5 : FF 		" "		rst	7
+19B6 : FF 		" "		rst	7
+19B7 : FF 		" "		rst	7
+19B8 : FF 		" "		rst	7
+19B9 : FF 		" "		rst	7
+19BA : FF 		" "		rst	7
+19BB : FF 		" "		rst	7
+19BC : FF 		" "		rst	7
+19BD : FF 		" "		rst	7
+19BE : FF 		" "		rst	7
+19BF : FF 		" "		rst	7
+19C0 : FF 		" "		rst	7
+19C1 : FF 		" "		rst	7
+19C2 : FF 		" "		rst	7
+19C3 : FF 		" "		rst	7
+19C4 : FF 		" "		rst	7
+19C5 : FF 		" "		rst	7
+19C6 : FF 		" "		rst	7
+19C7 : FF 		" "		rst	7
+19C8 : FF 		" "		rst	7
+19C9 : FF 		" "		rst	7
+19CA : FF 		" "		rst	7
+19CB : FF 		" "		rst	7
+19CC : FF 		" "		rst	7
+19CD : FF 		" "		rst	7
+19CE : FF 		" "		rst	7
+19CF : FF 		" "		rst	7
+19D0 : FF 		" "		rst	7
+19D1 : FF 		" "		rst	7
+19D2 : FF 		" "		rst	7
+19D3 : FF 		" "		rst	7
+19D4 : FF 		" "		rst	7
+19D5 : FF 		" "		rst	7
+19D6 : FF 		" "		rst	7
+19D7 : FF 		" "		rst	7
+19D8 : FF 		" "		rst	7
+19D9 : FF 		" "		rst	7
+19DA : FF 		" "		rst	7
+19DB : FF 		" "		rst	7
+19DC : FF 		" "		rst	7
+19DD : FF 		" "		rst	7
+19DE : FF 		" "		rst	7
+19DF : FF 		" "		rst	7
+19E0 : FF 		" "		rst	7
+19E1 : FF 		" "		rst	7
+19E2 : FF 		" "		rst	7
+19E3 : FF 		" "		rst	7
+19E4 : FF 		" "		rst	7
+19E5 : FF 		" "		rst	7
+19E6 : FF 		" "		rst	7
+19E7 : FF 		" "		rst	7
+19E8 : FF 		" "		rst	7
+19E9 : FF 		" "		rst	7
+19EA : FF 		" "		rst	7
+19EB : FF 		" "		rst	7
+19EC : FF 		" "		rst	7
+19ED : FF 		" "		rst	7
+19EE : FF 		" "		rst	7
+19EF : FF 		" "		rst	7
+19F0 : FF 		" "		rst	7
+19F1 : FF 		" "		rst	7
+19F2 : FF 		" "		rst	7
+19F3 : FF 		" "		rst	7
+19F4 : FF 		" "		rst	7
+19F5 : FF 		" "		rst	7
+19F6 : FF 		" "		rst	7
+19F7 : FF 		" "		rst	7
+19F8 : FF 		" "		rst	7
+19F9 : FF 		" "		rst	7
+19FA : FF 		" "		rst	7
+19FB : FF 		" "		rst	7
+19FC : FF 		" "		rst	7
+19FD : FF 		" "		rst	7
+19FE : FF 		" "		rst	7
+19FF : FF 		" "		rst	7
+1A00 : FF 		" "		rst	7
+1A01 : FF 		" "		rst	7
+1A02 : FF 		" "		rst	7
+1A03 : FF 		" "		rst	7
+1A04 : FF 		" "		rst	7
+1A05 : FF 		" "		rst	7
+1A06 : FF 		" "		rst	7
+1A07 : FF 		" "		rst	7
+1A08 : FF 		" "		rst	7
+1A09 : FF 		" "		rst	7
+1A0A : FF 		" "		rst	7
+1A0B : FF 		" "		rst	7
+1A0C : FF 		" "		rst	7
+1A0D : FF 		" "		rst	7
+1A0E : FF 		" "		rst	7
+1A0F : FF 		" "		rst	7
+1A10 : FF 		" "		rst	7
+1A11 : FF 		" "		rst	7
+1A12 : FF 		" "		rst	7
+1A13 : FF 		" "		rst	7
+1A14 : FF 		" "		rst	7
+1A15 : FF 		" "		rst	7
+1A16 : FF 		" "		rst	7
+1A17 : FF 		" "		rst	7
+1A18 : FF 		" "		rst	7
+1A19 : FF 		" "		rst	7
+1A1A : FF 		" "		rst	7
+1A1B : FF 		" "		rst	7
+1A1C : FF 		" "		rst	7
+1A1D : FF 		" "		rst	7
+1A1E : FF 		" "		rst	7
+1A1F : FF 		" "		rst	7
+1A20 : FF 		" "		rst	7
+1A21 : FF 		" "		rst	7
+1A22 : FF 		" "		rst	7
+1A23 : FF 		" "		rst	7
+1A24 : FF 		" "		rst	7
+1A25 : FF 		" "		rst	7
+1A26 : FF 		" "		rst	7
+1A27 : FF 		" "		rst	7
+1A28 : FF 		" "		rst	7
+1A29 : FF 		" "		rst	7
+1A2A : FF 		" "		rst	7
+1A2B : FF 		" "		rst	7
+1A2C : FF 		" "		rst	7
+1A2D : FF 		" "		rst	7
+1A2E : FF 		" "		rst	7
+1A2F : FF 		" "		rst	7
+1A30 : FF 		" "		rst	7
+1A31 : FF 		" "		rst	7
+1A32 : FF 		" "		rst	7
+1A33 : FF 		" "		rst	7
+1A34 : FF 		" "		rst	7
+1A35 : FF 		" "		rst	7
+1A36 : FF 		" "		rst	7
+1A37 : FF 		" "		rst	7
+1A38 : FF 		" "		rst	7
+1A39 : FF 		" "		rst	7
+1A3A : FF 		" "		rst	7
+1A3B : FF 		" "		rst	7
+1A3C : FF 		" "		rst	7
+1A3D : FF 		" "		rst	7
+1A3E : FF 		" "		rst	7
+1A3F : FF 		" "		rst	7
+1A40 : FF 		" "		rst	7
+1A41 : FF 		" "		rst	7
+1A42 : FF 		" "		rst	7
+1A43 : FF 		" "		rst	7
+1A44 : FF 		" "		rst	7
+1A45 : FF 		" "		rst	7
+1A46 : FF 		" "		rst	7
+1A47 : FF 		" "		rst	7
+1A48 : FF 		" "		rst	7
+1A49 : FF 		" "		rst	7
+1A4A : FF 		" "		rst	7
+1A4B : FF 		" "		rst	7
+1A4C : FF 		" "		rst	7
+1A4D : FF 		" "		rst	7
+1A4E : FF 		" "		rst	7
+1A4F : FF 		" "		rst	7
+1A50 : FF 		" "		rst	7
+1A51 : FF 		" "		rst	7
+1A52 : FF 		" "		rst	7
+1A53 : FF 		" "		rst	7
+1A54 : FF 		" "		rst	7
+1A55 : FF 		" "		rst	7
+1A56 : FF 		" "		rst	7
+1A57 : FF 		" "		rst	7
+1A58 : FF 		" "		rst	7
+1A59 : FF 		" "		rst	7
+1A5A : FF 		" "		rst	7
+1A5B : FF 		" "		rst	7
+1A5C : FF 		" "		rst	7
+1A5D : FF 		" "		rst	7
+1A5E : FF 		" "		rst	7
+1A5F : FF 		" "		rst	7
+1A60 : FF 		" "		rst	7
+1A61 : FF 		" "		rst	7
+1A62 : FF 		" "		rst	7
+1A63 : FF 		" "		rst	7
+1A64 : FF 		" "		rst	7
+1A65 : FF 		" "		rst	7
+1A66 : FF 		" "		rst	7
+1A67 : FF 		" "		rst	7
+1A68 : FF 		" "		rst	7
+1A69 : FF 		" "		rst	7
+1A6A : FF 		" "		rst	7
+1A6B : FF 		" "		rst	7
+1A6C : FF 		" "		rst	7
+1A6D : FF 		" "		rst	7
+1A6E : FF 		" "		rst	7
+1A6F : FF 		" "		rst	7
+1A70 : FF 		" "		rst	7
+1A71 : FF 		" "		rst	7
+1A72 : FF 		" "		rst	7
+1A73 : FF 		" "		rst	7
+1A74 : FF 		" "		rst	7
+1A75 : FF 		" "		rst	7
+1A76 : FF 		" "		rst	7
+1A77 : FF 		" "		rst	7
+1A78 : FF 		" "		rst	7
+1A79 : FF 		" "		rst	7
+1A7A : FF 		" "		rst	7
+1A7B : FF 		" "		rst	7
+1A7C : FF 		" "		rst	7
+1A7D : FF 		" "		rst	7
+1A7E : FF 		" "		rst	7
+1A7F : FF 		" "		rst	7
+1A80 : FF 		" "		rst	7
+1A81 : FF 		" "		rst	7
+1A82 : FF 		" "		rst	7
+1A83 : FF 		" "		rst	7
+1A84 : FF 		" "		rst	7
+1A85 : FF 		" "		rst	7
+1A86 : FF 		" "		rst	7
+1A87 : FF 		" "		rst	7
+1A88 : FF 		" "		rst	7
+1A89 : FF 		" "		rst	7
+1A8A : FF 		" "		rst	7
+1A8B : FF 		" "		rst	7
+1A8C : FF 		" "		rst	7
+1A8D : FF 		" "		rst	7
+1A8E : FF 		" "		rst	7
+1A8F : FF 		" "		rst	7
+1A90 : FF 		" "		rst	7
+1A91 : FF 		" "		rst	7
+1A92 : FF 		" "		rst	7
+1A93 : FF 		" "		rst	7
+1A94 : FF 		" "		rst	7
+1A95 : FF 		" "		rst	7
+1A96 : FF 		" "		rst	7
+1A97 : FF 		" "		rst	7
+1A98 : FF 		" "		rst	7
+1A99 : FF 		" "		rst	7
+1A9A : FF 		" "		rst	7
+1A9B : FF 		" "		rst	7
+1A9C : FF 		" "		rst	7
+1A9D : FF 		" "		rst	7
+1A9E : FF 		" "		rst	7
+1A9F : FF 		" "		rst	7
+1AA0 : FF 		" "		rst	7
+1AA1 : FF 		" "		rst	7
+1AA2 : FF 		" "		rst	7
+1AA3 : FF 		" "		rst	7
+1AA4 : FF 		" "		rst	7
+1AA5 : FF 		" "		rst	7
+1AA6 : FF 		" "		rst	7
+1AA7 : FF 		" "		rst	7
+1AA8 : FF 		" "		rst	7
+1AA9 : FF 		" "		rst	7
+1AAA : FF 		" "		rst	7
+1AAB : FF 		" "		rst	7
+1AAC : FF 		" "		rst	7
+1AAD : FF 		" "		rst	7
+1AAE : FF 		" "		rst	7
+1AAF : FF 		" "		rst	7
+1AB0 : FF 		" "		rst	7
+1AB1 : FF 		" "		rst	7
+1AB2 : FF 		" "		rst	7
+1AB3 : FF 		" "		rst	7
+1AB4 : FF 		" "		rst	7
+1AB5 : FF 		" "		rst	7
+1AB6 : FF 		" "		rst	7
+1AB7 : FF 		" "		rst	7
+1AB8 : FF 		" "		rst	7
+1AB9 : FF 		" "		rst	7
+1ABA : FF 		" "		rst	7
+1ABB : FF 		" "		rst	7
+1ABC : FF 		" "		rst	7
+1ABD : FF 		" "		rst	7
+1ABE : FF 		" "		rst	7
+1ABF : FF 		" "		rst	7
+1AC0 : FF 		" "		rst	7
+1AC1 : FF 		" "		rst	7
+1AC2 : FF 		" "		rst	7
+1AC3 : FF 		" "		rst	7
+1AC4 : FF 		" "		rst	7
+1AC5 : FF 		" "		rst	7
+1AC6 : FF 		" "		rst	7
+1AC7 : FF 		" "		rst	7
+1AC8 : FF 		" "		rst	7
+1AC9 : FF 		" "		rst	7
+1ACA : FF 		" "		rst	7
+1ACB : FF 		" "		rst	7
+1ACC : FF 		" "		rst	7
+1ACD : FF 		" "		rst	7
+1ACE : FF 		" "		rst	7
+1ACF : FF 		" "		rst	7
+1AD0 : FF 		" "		rst	7
+1AD1 : FF 		" "		rst	7
+1AD2 : FF 		" "		rst	7
+1AD3 : FF 		" "		rst	7
+1AD4 : FF 		" "		rst	7
+1AD5 : FF 		" "		rst	7
+1AD6 : FF 		" "		rst	7
+1AD7 : FF 		" "		rst	7
+1AD8 : FF 		" "		rst	7
+1AD9 : FF 		" "		rst	7
+1ADA : FF 		" "		rst	7
+1ADB : FF 		" "		rst	7
+1ADC : FF 		" "		rst	7
+1ADD : FF 		" "		rst	7
+1ADE : FF 		" "		rst	7
+1ADF : FF 		" "		rst	7
+1AE0 : FF 		" "		rst	7
+1AE1 : FF 		" "		rst	7
+1AE2 : FF 		" "		rst	7
+1AE3 : FF 		" "		rst	7
+1AE4 : FF 		" "		rst	7
+1AE5 : FF 		" "		rst	7
+1AE6 : FF 		" "		rst	7
+1AE7 : FF 		" "		rst	7
+1AE8 : FF 		" "		rst	7
+1AE9 : FF 		" "		rst	7
+1AEA : FF 		" "		rst	7
+1AEB : FF 		" "		rst	7
+1AEC : FF 		" "		rst	7
+1AED : FF 		" "		rst	7
+1AEE : FF 		" "		rst	7
+1AEF : FF 		" "		rst	7
+1AF0 : FF 		" "		rst	7
+1AF1 : FF 		" "		rst	7
+1AF2 : FF 		" "		rst	7
+1AF3 : FF 		" "		rst	7
+1AF4 : FF 		" "		rst	7
+1AF5 : FF 		" "		rst	7
+1AF6 : FF 		" "		rst	7
+1AF7 : FF 		" "		rst	7
+1AF8 : FF 		" "		rst	7
+1AF9 : FF 		" "		rst	7
+1AFA : FF 		" "		rst	7
+1AFB : FF 		" "		rst	7
+1AFC : FF 		" "		rst	7
+1AFD : FF 		" "		rst	7
+1AFE : FF 		" "		rst	7
+1AFF : FF 		" "		rst	7
+1B00 : FF 		" "		rst	7
+1B01 : FF 		" "		rst	7
+1B02 : FF 		" "		rst	7
+1B03 : FF 		" "		rst	7
+1B04 : FF 		" "		rst	7
+1B05 : FF 		" "		rst	7
+1B06 : FF 		" "		rst	7
+1B07 : FF 		" "		rst	7
+1B08 : FF 		" "		rst	7
+1B09 : FF 		" "		rst	7
+1B0A : FF 		" "		rst	7
+1B0B : FF 		" "		rst	7
+1B0C : FF 		" "		rst	7
+1B0D : FF 		" "		rst	7
+1B0E : FF 		" "		rst	7
+1B0F : FF 		" "		rst	7
+1B10 : FF 		" "		rst	7
+1B11 : FF 		" "		rst	7
+1B12 : FF 		" "		rst	7
+1B13 : FF 		" "		rst	7
+1B14 : FF 		" "		rst	7
+1B15 : FF 		" "		rst	7
+1B16 : FF 		" "		rst	7
+1B17 : FF 		" "		rst	7
+1B18 : FF 		" "		rst	7
+1B19 : FF 		" "		rst	7
+1B1A : FF 		" "		rst	7
+1B1B : FF 		" "		rst	7
+1B1C : FF 		" "		rst	7
+1B1D : FF 		" "		rst	7
+1B1E : FF 		" "		rst	7
+1B1F : FF 		" "		rst	7
+1B20 : FF 		" "		rst	7
+1B21 : FF 		" "		rst	7
+1B22 : FF 		" "		rst	7
+1B23 : FF 		" "		rst	7
+1B24 : FF 		" "		rst	7
+1B25 : FF 		" "		rst	7
+1B26 : FF 		" "		rst	7
+1B27 : FF 		" "		rst	7
+1B28 : FF 		" "		rst	7
+1B29 : FF 		" "		rst	7
+1B2A : FF 		" "		rst	7
+1B2B : FF 		" "		rst	7
+1B2C : FF 		" "		rst	7
+1B2D : FF 		" "		rst	7
+1B2E : FF 		" "		rst	7
+1B2F : FF 		" "		rst	7
+1B30 : FF 		" "		rst	7
+1B31 : FF 		" "		rst	7
+1B32 : FF 		" "		rst	7
+1B33 : FF 		" "		rst	7
+1B34 : FF 		" "		rst	7
+1B35 : FF 		" "		rst	7
+1B36 : FF 		" "		rst	7
+1B37 : FF 		" "		rst	7
+1B38 : FF 		" "		rst	7
+1B39 : FF 		" "		rst	7
+1B3A : FF 		" "		rst	7
+1B3B : FF 		" "		rst	7
+1B3C : FF 		" "		rst	7
+1B3D : FF 		" "		rst	7
+1B3E : FF 		" "		rst	7
+1B3F : FF 		" "		rst	7
+1B40 : FF 		" "		rst	7
+1B41 : FF 		" "		rst	7
+1B42 : FF 		" "		rst	7
+1B43 : FF 		" "		rst	7
+1B44 : FF 		" "		rst	7
+1B45 : FF 		" "		rst	7
+1B46 : FF 		" "		rst	7
+1B47 : FF 		" "		rst	7
+1B48 : FF 		" "		rst	7
+1B49 : FF 		" "		rst	7
+1B4A : FF 		" "		rst	7
+1B4B : FF 		" "		rst	7
+1B4C : FF 		" "		rst	7
+1B4D : FF 		" "		rst	7
+1B4E : FF 		" "		rst	7
+1B4F : FF 		" "		rst	7
+1B50 : FF 		" "		rst	7
+1B51 : FF 		" "		rst	7
+1B52 : FF 		" "		rst	7
+1B53 : FF 		" "		rst	7
+1B54 : FF 		" "		rst	7
+1B55 : FF 		" "		rst	7
+1B56 : FF 		" "		rst	7
+1B57 : FF 		" "		rst	7
+1B58 : FF 		" "		rst	7
+1B59 : FF 		" "		rst	7
+1B5A : FF 		" "		rst	7
+1B5B : FF 		" "		rst	7
+1B5C : FF 		" "		rst	7
+1B5D : FF 		" "		rst	7
+1B5E : FF 		" "		rst	7
+1B5F : FF 		" "		rst	7
+1B60 : FF 		" "		rst	7
+1B61 : FF 		" "		rst	7
+1B62 : FF 		" "		rst	7
+1B63 : FF 		" "		rst	7
+1B64 : FF 		" "		rst	7
+1B65 : FF 		" "		rst	7
+1B66 : FF 		" "		rst	7
+1B67 : FF 		" "		rst	7
+1B68 : FF 		" "		rst	7
+1B69 : FF 		" "		rst	7
+1B6A : FF 		" "		rst	7
+1B6B : FF 		" "		rst	7
+1B6C : FF 		" "		rst	7
+1B6D : FF 		" "		rst	7
+1B6E : FF 		" "		rst	7
+1B6F : FF 		" "		rst	7
+1B70 : FF 		" "		rst	7
+1B71 : FF 		" "		rst	7
+1B72 : FF 		" "		rst	7
+1B73 : FF 		" "		rst	7
+1B74 : FF 		" "		rst	7
+1B75 : FF 		" "		rst	7
+1B76 : FF 		" "		rst	7
+1B77 : FF 		" "		rst	7
+1B78 : FF 		" "		rst	7
+1B79 : FF 		" "		rst	7
+1B7A : FF 		" "		rst	7
+1B7B : FF 		" "		rst	7
+1B7C : FF 		" "		rst	7
+1B7D : FF 		" "		rst	7
+1B7E : FF 		" "		rst	7
+1B7F : FF 		" "		rst	7
+1B80 : FF 		" "		rst	7
+1B81 : FF 		" "		rst	7
+1B82 : FF 		" "		rst	7
+1B83 : FF 		" "		rst	7
+1B84 : FF 		" "		rst	7
+1B85 : FF 		" "		rst	7
+1B86 : FF 		" "		rst	7
+1B87 : FF 		" "		rst	7
+1B88 : FF 		" "		rst	7
+1B89 : FF 		" "		rst	7
+1B8A : FF 		" "		rst	7
+1B8B : FF 		" "		rst	7
+1B8C : FF 		" "		rst	7
+1B8D : FF 		" "		rst	7
+1B8E : FF 		" "		rst	7
+1B8F : FF 		" "		rst	7
+1B90 : FF 		" "		rst	7
+1B91 : FF 		" "		rst	7
+1B92 : FF 		" "		rst	7
+1B93 : FF 		" "		rst	7
+1B94 : FF 		" "		rst	7
+1B95 : FF 		" "		rst	7
+1B96 : FF 		" "		rst	7
+1B97 : FF 		" "		rst	7
+1B98 : FF 		" "		rst	7
+1B99 : FF 		" "		rst	7
+1B9A : FF 		" "		rst	7
+1B9B : FF 		" "		rst	7
+1B9C : FF 		" "		rst	7
+1B9D : FF 		" "		rst	7
+1B9E : FF 		" "		rst	7
+1B9F : FF 		" "		rst	7
+1BA0 : FF 		" "		rst	7
+1BA1 : FF 		" "		rst	7
+1BA2 : FF 		" "		rst	7
+1BA3 : FF 		" "		rst	7
+1BA4 : FF 		" "		rst	7
+1BA5 : FF 		" "		rst	7
+1BA6 : FF 		" "		rst	7
+1BA7 : FF 		" "		rst	7
+1BA8 : FF 		" "		rst	7
+1BA9 : FF 		" "		rst	7
+1BAA : FF 		" "		rst	7
+1BAB : FF 		" "		rst	7
+1BAC : FF 		" "		rst	7
+1BAD : FF 		" "		rst	7
+1BAE : FF 		" "		rst	7
+1BAF : FF 		" "		rst	7
+1BB0 : FF 		" "		rst	7
+1BB1 : FF 		" "		rst	7
+1BB2 : FF 		" "		rst	7
+1BB3 : FF 		" "		rst	7
+1BB4 : FF 		" "		rst	7
+1BB5 : FF 		" "		rst	7
+1BB6 : FF 		" "		rst	7
+1BB7 : FF 		" "		rst	7
+1BB8 : FF 		" "		rst	7
+1BB9 : FF 		" "		rst	7
+1BBA : FF 		" "		rst	7
+1BBB : FF 		" "		rst	7
+1BBC : FF 		" "		rst	7
+1BBD : FF 		" "		rst	7
+1BBE : FF 		" "		rst	7
+1BBF : FF 		" "		rst	7
+1BC0 : FF 		" "		rst	7
+1BC1 : FF 		" "		rst	7
+1BC2 : FF 		" "		rst	7
+1BC3 : FF 		" "		rst	7
+1BC4 : FF 		" "		rst	7
+1BC5 : FF 		" "		rst	7
+1BC6 : FF 		" "		rst	7
+1BC7 : FF 		" "		rst	7
+1BC8 : FF 		" "		rst	7
+1BC9 : FF 		" "		rst	7
+1BCA : FF 		" "		rst	7
+1BCB : FF 		" "		rst	7
+1BCC : FF 		" "		rst	7
+1BCD : FF 		" "		rst	7
+1BCE : FF 		" "		rst	7
+1BCF : FF 		" "		rst	7
+1BD0 : FF 		" "		rst	7
+1BD1 : FF 		" "		rst	7
+1BD2 : FF 		" "		rst	7
+1BD3 : FF 		" "		rst	7
+1BD4 : FF 		" "		rst	7
+1BD5 : FF 		" "		rst	7
+1BD6 : FF 		" "		rst	7
+1BD7 : FF 		" "		rst	7
+1BD8 : FF 		" "		rst	7
+1BD9 : FF 		" "		rst	7
+1BDA : FF 		" "		rst	7
+1BDB : FF 		" "		rst	7
+1BDC : FF 		" "		rst	7
+1BDD : FF 		" "		rst	7
+1BDE : FF 		" "		rst	7
+1BDF : FF 		" "		rst	7
+1BE0 : FF 		" "		rst	7
+1BE1 : FF 		" "		rst	7
+1BE2 : FF 		" "		rst	7
+1BE3 : FF 		" "		rst	7
+1BE4 : FF 		" "		rst	7
+1BE5 : FF 		" "		rst	7
+1BE6 : FF 		" "		rst	7
+1BE7 : FF 		" "		rst	7
+1BE8 : FF 		" "		rst	7
+1BE9 : FF 		" "		rst	7
+1BEA : FF 		" "		rst	7
+1BEB : FF 		" "		rst	7
+1BEC : FF 		" "		rst	7
+1BED : FF 		" "		rst	7
+1BEE : FF 		" "		rst	7
+1BEF : FF 		" "		rst	7
+1BF0 : FF 		" "		rst	7
+1BF1 : FF 		" "		rst	7
+1BF2 : FF 		" "		rst	7
+1BF3 : FF 		" "		rst	7
+1BF4 : FF 		" "		rst	7
+1BF5 : FF 		" "		rst	7
+1BF6 : FF 		" "		rst	7
+1BF7 : FF 		" "		rst	7
+1BF8 : FF 		" "		rst	7
+1BF9 : FF 		" "		rst	7
+1BFA : FF 		" "		rst	7
+1BFB : FF 		" "		rst	7
+1BFC : FF 		" "		rst	7
+1BFD : FF 		" "		rst	7
+1BFE : FF 		" "		rst	7
+1BFF : FF 		" "		rst	7
+1C00 : FF 		" "		rst	7
+1C01 : FF 		" "		rst	7
+1C02 : FF 		" "		rst	7
+1C03 : FF 		" "		rst	7
+1C04 : FF 		" "		rst	7
+1C05 : FF 		" "		rst	7
+1C06 : FF 		" "		rst	7
+1C07 : FF 		" "		rst	7
+1C08 : FF 		" "		rst	7
+1C09 : FF 		" "		rst	7
+1C0A : FF 		" "		rst	7
+1C0B : FF 		" "		rst	7
+1C0C : FF 		" "		rst	7
+1C0D : FF 		" "		rst	7
+1C0E : FF 		" "		rst	7
+1C0F : FF 		" "		rst	7
+1C10 : FF 		" "		rst	7
+1C11 : FF 		" "		rst	7
+1C12 : FF 		" "		rst	7
+1C13 : FF 		" "		rst	7
+1C14 : FF 		" "		rst	7
+1C15 : FF 		" "		rst	7
+1C16 : FF 		" "		rst	7
+1C17 : FF 		" "		rst	7
+1C18 : FF 		" "		rst	7
+1C19 : FF 		" "		rst	7
+1C1A : FF 		" "		rst	7
+1C1B : FF 		" "		rst	7
+1C1C : FF 		" "		rst	7
+1C1D : FF 		" "		rst	7
+1C1E : FF 		" "		rst	7
+1C1F : FF 		" "		rst	7
+1C20 : FF 		" "		rst	7
+1C21 : FF 		" "		rst	7
+1C22 : FF 		" "		rst	7
+1C23 : FF 		" "		rst	7
+1C24 : FF 		" "		rst	7
+1C25 : FF 		" "		rst	7
+1C26 : FF 		" "		rst	7
+1C27 : FF 		" "		rst	7
+1C28 : FF 		" "		rst	7
+1C29 : FF 		" "		rst	7
+1C2A : FF 		" "		rst	7
+1C2B : FF 		" "		rst	7
+1C2C : FF 		" "		rst	7
+1C2D : FF 		" "		rst	7
+1C2E : FF 		" "		rst	7
+1C2F : FF 		" "		rst	7
+1C30 : FF 		" "		rst	7
+1C31 : FF 		" "		rst	7
+1C32 : FF 		" "		rst	7
+1C33 : FF 		" "		rst	7
+1C34 : FF 		" "		rst	7
+1C35 : FF 		" "		rst	7
+1C36 : FF 		" "		rst	7
+1C37 : FF 		" "		rst	7
+1C38 : FF 		" "		rst	7
+1C39 : FF 		" "		rst	7
+1C3A : FF 		" "		rst	7
+1C3B : FF 		" "		rst	7
+1C3C : FF 		" "		rst	7
+1C3D : FF 		" "		rst	7
+1C3E : FF 		" "		rst	7
+1C3F : FF 		" "		rst	7
+1C40 : FF 		" "		rst	7
+1C41 : FF 		" "		rst	7
+1C42 : FF 		" "		rst	7
+1C43 : FF 		" "		rst	7
+1C44 : FF 		" "		rst	7
+1C45 : FF 		" "		rst	7
+1C46 : FF 		" "		rst	7
+1C47 : FF 		" "		rst	7
+1C48 : FF 		" "		rst	7
+1C49 : FF 		" "		rst	7
+1C4A : FF 		" "		rst	7
+1C4B : FF 		" "		rst	7
+1C4C : FF 		" "		rst	7
+1C4D : FF 		" "		rst	7
+1C4E : FF 		" "		rst	7
+1C4F : FF 		" "		rst	7
+1C50 : FF 		" "		rst	7
+1C51 : FF 		" "		rst	7
+1C52 : FF 		" "		rst	7
+1C53 : FF 		" "		rst	7
+1C54 : FF 		" "		rst	7
+1C55 : FF 		" "		rst	7
+1C56 : FF 		" "		rst	7
+1C57 : FF 		" "		rst	7
+1C58 : FF 		" "		rst	7
+1C59 : FF 		" "		rst	7
+1C5A : FF 		" "		rst	7
+1C5B : FF 		" "		rst	7
+1C5C : FF 		" "		rst	7
+1C5D : FF 		" "		rst	7
+1C5E : FF 		" "		rst	7
+1C5F : FF 		" "		rst	7
+1C60 : FF 		" "		rst	7
+1C61 : FF 		" "		rst	7
+1C62 : FF 		" "		rst	7
+1C63 : FF 		" "		rst	7
+1C64 : FF 		" "		rst	7
+1C65 : FF 		" "		rst	7
+1C66 : FF 		" "		rst	7
+1C67 : FF 		" "		rst	7
+1C68 : FF 		" "		rst	7
+1C69 : FF 		" "		rst	7
+1C6A : FF 		" "		rst	7
+1C6B : FF 		" "		rst	7
+1C6C : FF 		" "		rst	7
+1C6D : FF 		" "		rst	7
+1C6E : FF 		" "		rst	7
+1C6F : FF 		" "		rst	7
+1C70 : FF 		" "		rst	7
+1C71 : FF 		" "		rst	7
+1C72 : FF 		" "		rst	7
+1C73 : FF 		" "		rst	7
+1C74 : FF 		" "		rst	7
+1C75 : FF 		" "		rst	7
+1C76 : FF 		" "		rst	7
+1C77 : FF 		" "		rst	7
+1C78 : FF 		" "		rst	7
+1C79 : FF 		" "		rst	7
+1C7A : FF 		" "		rst	7
+1C7B : FF 		" "		rst	7
+1C7C : FF 		" "		rst	7
+1C7D : FF 		" "		rst	7
+1C7E : FF 		" "		rst	7
+1C7F : FF 		" "		rst	7
+1C80 : FF 		" "		rst	7
+1C81 : FF 		" "		rst	7
+1C82 : FF 		" "		rst	7
+1C83 : FF 		" "		rst	7
+1C84 : FF 		" "		rst	7
+1C85 : FF 		" "		rst	7
+1C86 : FF 		" "		rst	7
+1C87 : FF 		" "		rst	7
+1C88 : FF 		" "		rst	7
+1C89 : FF 		" "		rst	7
+1C8A : FF 		" "		rst	7
+1C8B : FF 		" "		rst	7
+1C8C : FF 		" "		rst	7
+1C8D : FF 		" "		rst	7
+1C8E : FF 		" "		rst	7
+1C8F : FF 		" "		rst	7
+1C90 : FF 		" "		rst	7
+1C91 : FF 		" "		rst	7
+1C92 : FF 		" "		rst	7
+1C93 : FF 		" "		rst	7
+1C94 : FF 		" "		rst	7
+1C95 : FF 		" "		rst	7
+1C96 : FF 		" "		rst	7
+1C97 : FF 		" "		rst	7
+1C98 : FF 		" "		rst	7
+1C99 : FF 		" "		rst	7
+1C9A : FF 		" "		rst	7
+1C9B : FF 		" "		rst	7
+1C9C : FF 		" "		rst	7
+1C9D : FF 		" "		rst	7
+1C9E : FF 		" "		rst	7
+1C9F : FF 		" "		rst	7
+1CA0 : FF 		" "		rst	7
+1CA1 : FF 		" "		rst	7
+1CA2 : FF 		" "		rst	7
+1CA3 : FF 		" "		rst	7
+1CA4 : FF 		" "		rst	7
+1CA5 : FF 		" "		rst	7
+1CA6 : FF 		" "		rst	7
+1CA7 : FF 		" "		rst	7
+1CA8 : FF 		" "		rst	7
+1CA9 : FF 		" "		rst	7
+1CAA : FF 		" "		rst	7
+1CAB : FF 		" "		rst	7
+1CAC : FF 		" "		rst	7
+1CAD : FF 		" "		rst	7
+1CAE : FF 		" "		rst	7
+1CAF : FF 		" "		rst	7
+1CB0 : FF 		" "		rst	7
+1CB1 : FF 		" "		rst	7
+1CB2 : FF 		" "		rst	7
+1CB3 : FF 		" "		rst	7
+1CB4 : FF 		" "		rst	7
+1CB5 : FF 		" "		rst	7
+1CB6 : FF 		" "		rst	7
+1CB7 : FF 		" "		rst	7
+1CB8 : FF 		" "		rst	7
+1CB9 : FF 		" "		rst	7
+1CBA : FF 		" "		rst	7
+1CBB : FF 		" "		rst	7
+1CBC : FF 		" "		rst	7
+1CBD : FF 		" "		rst	7
+1CBE : FF 		" "		rst	7
+1CBF : FF 		" "		rst	7
+1CC0 : FF 		" "		rst	7
+1CC1 : FF 		" "		rst	7
+1CC2 : FF 		" "		rst	7
+1CC3 : FF 		" "		rst	7
+1CC4 : FF 		" "		rst	7
+1CC5 : FF 		" "		rst	7
+1CC6 : FF 		" "		rst	7
+1CC7 : FF 		" "		rst	7
+1CC8 : FF 		" "		rst	7
+1CC9 : FF 		" "		rst	7
+1CCA : FF 		" "		rst	7
+1CCB : FF 		" "		rst	7
+1CCC : FF 		" "		rst	7
+1CCD : FF 		" "		rst	7
+1CCE : FF 		" "		rst	7
+1CCF : FF 		" "		rst	7
+1CD0 : FF 		" "		rst	7
+1CD1 : FF 		" "		rst	7
+1CD2 : FF 		" "		rst	7
+1CD3 : FF 		" "		rst	7
+1CD4 : FF 		" "		rst	7
+1CD5 : FF 		" "		rst	7
+1CD6 : FF 		" "		rst	7
+1CD7 : FF 		" "		rst	7
+1CD8 : FF 		" "		rst	7
+1CD9 : FF 		" "		rst	7
+1CDA : FF 		" "		rst	7
+1CDB : FF 		" "		rst	7
+1CDC : FF 		" "		rst	7
+1CDD : FF 		" "		rst	7
+1CDE : FF 		" "		rst	7
+1CDF : FF 		" "		rst	7
+1CE0 : FF 		" "		rst	7
+1CE1 : FF 		" "		rst	7
+1CE2 : FF 		" "		rst	7
+1CE3 : FF 		" "		rst	7
+1CE4 : FF 		" "		rst	7
+1CE5 : FF 		" "		rst	7
+1CE6 : FF 		" "		rst	7
+1CE7 : FF 		" "		rst	7
+1CE8 : FF 		" "		rst	7
+1CE9 : FF 		" "		rst	7
+1CEA : FF 		" "		rst	7
+1CEB : FF 		" "		rst	7
+1CEC : FF 		" "		rst	7
+1CED : FF 		" "		rst	7
+1CEE : FF 		" "		rst	7
+1CEF : FF 		" "		rst	7
+1CF0 : FF 		" "		rst	7
+1CF1 : FF 		" "		rst	7
+1CF2 : FF 		" "		rst	7
+1CF3 : FF 		" "		rst	7
+1CF4 : FF 		" "		rst	7
+1CF5 : FF 		" "		rst	7
+1CF6 : FF 		" "		rst	7
+1CF7 : FF 		" "		rst	7
+1CF8 : FF 		" "		rst	7
+1CF9 : FF 		" "		rst	7
+1CFA : FF 		" "		rst	7
+1CFB : FF 		" "		rst	7
+1CFC : FF 		" "		rst	7
+1CFD : FF 		" "		rst	7
+1CFE : FF 		" "		rst	7
+1CFF : FF 		" "		rst	7
+1D00 : FF 		" "		rst	7
+1D01 : FF 		" "		rst	7
+1D02 : FF 		" "		rst	7
+1D03 : FF 		" "		rst	7
+1D04 : FF 		" "		rst	7
+1D05 : FF 		" "		rst	7
+1D06 : FF 		" "		rst	7
+1D07 : FF 		" "		rst	7
+1D08 : FF 		" "		rst	7
+1D09 : FF 		" "		rst	7
+1D0A : FF 		" "		rst	7
+1D0B : FF 		" "		rst	7
+1D0C : FF 		" "		rst	7
+1D0D : FF 		" "		rst	7
+1D0E : FF 		" "		rst	7
+1D0F : FF 		" "		rst	7
+1D10 : FF 		" "		rst	7
+1D11 : FF 		" "		rst	7
+1D12 : FF 		" "		rst	7
+1D13 : FF 		" "		rst	7
+1D14 : FF 		" "		rst	7
+1D15 : FF 		" "		rst	7
+1D16 : FF 		" "		rst	7
+1D17 : FF 		" "		rst	7
+1D18 : FF 		" "		rst	7
+1D19 : FF 		" "		rst	7
+1D1A : FF 		" "		rst	7
+1D1B : FF 		" "		rst	7
+1D1C : FF 		" "		rst	7
+1D1D : FF 		" "		rst	7
+1D1E : FF 		" "		rst	7
+1D1F : FF 		" "		rst	7
+1D20 : FF 		" "		rst	7
+1D21 : FF 		" "		rst	7
+1D22 : FF 		" "		rst	7
+1D23 : FF 		" "		rst	7
+1D24 : FF 		" "		rst	7
+1D25 : FF 		" "		rst	7
+1D26 : FF 		" "		rst	7
+1D27 : FF 		" "		rst	7
+1D28 : FF 		" "		rst	7
+1D29 : FF 		" "		rst	7
+1D2A : FF 		" "		rst	7
+1D2B : FF 		" "		rst	7
+1D2C : FF 		" "		rst	7
+1D2D : FF 		" "		rst	7
+1D2E : FF 		" "		rst	7
+1D2F : FF 		" "		rst	7
+1D30 : FF 		" "		rst	7
+1D31 : FF 		" "		rst	7
+1D32 : FF 		" "		rst	7
+1D33 : FF 		" "		rst	7
+1D34 : FF 		" "		rst	7
+1D35 : FF 		" "		rst	7
+1D36 : FF 		" "		rst	7
+1D37 : FF 		" "		rst	7
+1D38 : FF 		" "		rst	7
+1D39 : FF 		" "		rst	7
+1D3A : FF 		" "		rst	7
+1D3B : FF 		" "		rst	7
+1D3C : FF 		" "		rst	7
+1D3D : FF 		" "		rst	7
+1D3E : FF 		" "		rst	7
+1D3F : FF 		" "		rst	7
+1D40 : FF 		" "		rst	7
+1D41 : FF 		" "		rst	7
+1D42 : FF 		" "		rst	7
+1D43 : FF 		" "		rst	7
+1D44 : FF 		" "		rst	7
+1D45 : FF 		" "		rst	7
+1D46 : FF 		" "		rst	7
+1D47 : FF 		" "		rst	7
+1D48 : FF 		" "		rst	7
+1D49 : FF 		" "		rst	7
+1D4A : FF 		" "		rst	7
+1D4B : FF 		" "		rst	7
+1D4C : FF 		" "		rst	7
+1D4D : FF 		" "		rst	7
+1D4E : FF 		" "		rst	7
+1D4F : FF 		" "		rst	7
+1D50 : FF 		" "		rst	7
+1D51 : FF 		" "		rst	7
+1D52 : FF 		" "		rst	7
+1D53 : FF 		" "		rst	7
+1D54 : FF 		" "		rst	7
+1D55 : FF 		" "		rst	7
+1D56 : FF 		" "		rst	7
+1D57 : FF 		" "		rst	7
+1D58 : FF 		" "		rst	7
+1D59 : FF 		" "		rst	7
+1D5A : FF 		" "		rst	7
+1D5B : FF 		" "		rst	7
+1D5C : FF 		" "		rst	7
+1D5D : FF 		" "		rst	7
+1D5E : FF 		" "		rst	7
+1D5F : FF 		" "		rst	7
+1D60 : FF 		" "		rst	7
+1D61 : FF 		" "		rst	7
+1D62 : FF 		" "		rst	7
+1D63 : FF 		" "		rst	7
+1D64 : FF 		" "		rst	7
+1D65 : FF 		" "		rst	7
+1D66 : FF 		" "		rst	7
+1D67 : FF 		" "		rst	7
+1D68 : FF 		" "		rst	7
+1D69 : FF 		" "		rst	7
+1D6A : FF 		" "		rst	7
+1D6B : FF 		" "		rst	7
+1D6C : FF 		" "		rst	7
+1D6D : FF 		" "		rst	7
+1D6E : FF 		" "		rst	7
+1D6F : FF 		" "		rst	7
+1D70 : FF 		" "		rst	7
+1D71 : FF 		" "		rst	7
+1D72 : FF 		" "		rst	7
+1D73 : FF 		" "		rst	7
+1D74 : FF 		" "		rst	7
+1D75 : FF 		" "		rst	7
+1D76 : FF 		" "		rst	7
+1D77 : FF 		" "		rst	7
+1D78 : FF 		" "		rst	7
+1D79 : FF 		" "		rst	7
+1D7A : FF 		" "		rst	7
+1D7B : FF 		" "		rst	7
+1D7C : FF 		" "		rst	7
+1D7D : FF 		" "		rst	7
+1D7E : FF 		" "		rst	7
+1D7F : FF 		" "		rst	7
+1D80 : FF 		" "		rst	7
+1D81 : FF 		" "		rst	7
+1D82 : FF 		" "		rst	7
+1D83 : FF 		" "		rst	7
+1D84 : FF 		" "		rst	7
+1D85 : FF 		" "		rst	7
+1D86 : FF 		" "		rst	7
+1D87 : FF 		" "		rst	7
+1D88 : FF 		" "		rst	7
+1D89 : FF 		" "		rst	7
+1D8A : FF 		" "		rst	7
+1D8B : FF 		" "		rst	7
+1D8C : FF 		" "		rst	7
+1D8D : FF 		" "		rst	7
+1D8E : FF 		" "		rst	7
+1D8F : FF 		" "		rst	7
+1D90 : FF 		" "		rst	7
+1D91 : FF 		" "		rst	7
+1D92 : FF 		" "		rst	7
+1D93 : FF 		" "		rst	7
+1D94 : FF 		" "		rst	7
+1D95 : FF 		" "		rst	7
+1D96 : FF 		" "		rst	7
+1D97 : FF 		" "		rst	7
+1D98 : FF 		" "		rst	7
+1D99 : FF 		" "		rst	7
+1D9A : FF 		" "		rst	7
+1D9B : FF 		" "		rst	7
+1D9C : FF 		" "		rst	7
+1D9D : FF 		" "		rst	7
+1D9E : FF 		" "		rst	7
+1D9F : FF 		" "		rst	7
+1DA0 : FF 		" "		rst	7
+1DA1 : FF 		" "		rst	7
+1DA2 : FF 		" "		rst	7
+1DA3 : FF 		" "		rst	7
+1DA4 : FF 		" "		rst	7
+1DA5 : FF 		" "		rst	7
+1DA6 : FF 		" "		rst	7
+1DA7 : FF 		" "		rst	7
+1DA8 : FF 		" "		rst	7
+1DA9 : FF 		" "		rst	7
+1DAA : FF 		" "		rst	7
+1DAB : FF 		" "		rst	7
+1DAC : FF 		" "		rst	7
+1DAD : FF 		" "		rst	7
+1DAE : FF 		" "		rst	7
+1DAF : FF 		" "		rst	7
+1DB0 : FF 		" "		rst	7
+1DB1 : FF 		" "		rst	7
+1DB2 : FF 		" "		rst	7
+1DB3 : FF 		" "		rst	7
+1DB4 : FF 		" "		rst	7
+1DB5 : FF 		" "		rst	7
+1DB6 : FF 		" "		rst	7
+1DB7 : FF 		" "		rst	7
+1DB8 : FF 		" "		rst	7
+1DB9 : FF 		" "		rst	7
+1DBA : FF 		" "		rst	7
+1DBB : FF 		" "		rst	7
+1DBC : FF 		" "		rst	7
+1DBD : FF 		" "		rst	7
+1DBE : FF 		" "		rst	7
+1DBF : FF 		" "		rst	7
+1DC0 : FF 		" "		rst	7
+1DC1 : FF 		" "		rst	7
+1DC2 : FF 		" "		rst	7
+1DC3 : FF 		" "		rst	7
+1DC4 : FF 		" "		rst	7
+1DC5 : FF 		" "		rst	7
+1DC6 : FF 		" "		rst	7
+1DC7 : FF 		" "		rst	7
+1DC8 : FF 		" "		rst	7
+1DC9 : FF 		" "		rst	7
+1DCA : FF 		" "		rst	7
+1DCB : FF 		" "		rst	7
+1DCC : FF 		" "		rst	7
+1DCD : FF 		" "		rst	7
+1DCE : FF 		" "		rst	7
+1DCF : FF 		" "		rst	7
+1DD0 : FF 		" "		rst	7
+1DD1 : FF 		" "		rst	7
+1DD2 : FF 		" "		rst	7
+1DD3 : FF 		" "		rst	7
+1DD4 : FF 		" "		rst	7
+1DD5 : FF 		" "		rst	7
+1DD6 : FF 		" "		rst	7
+1DD7 : FF 		" "		rst	7
+1DD8 : FF 		" "		rst	7
+1DD9 : FF 		" "		rst	7
+1DDA : FF 		" "		rst	7
+1DDB : FF 		" "		rst	7
+1DDC : FF 		" "		rst	7
+1DDD : FF 		" "		rst	7
+1DDE : FF 		" "		rst	7
+1DDF : FF 		" "		rst	7
+1DE0 : FF 		" "		rst	7
+1DE1 : FF 		" "		rst	7
+1DE2 : FF 		" "		rst	7
+1DE3 : FF 		" "		rst	7
+1DE4 : FF 		" "		rst	7
+1DE5 : FF 		" "		rst	7
+1DE6 : FF 		" "		rst	7
+1DE7 : FF 		" "		rst	7
+1DE8 : FF 		" "		rst	7
+1DE9 : FF 		" "		rst	7
+1DEA : FF 		" "		rst	7
+1DEB : FF 		" "		rst	7
+1DEC : FF 		" "		rst	7
+1DED : FF 		" "		rst	7
+1DEE : FF 		" "		rst	7
+1DEF : FF 		" "		rst	7
+1DF0 : FF 		" "		rst	7
+1DF1 : FF 		" "		rst	7
+1DF2 : FF 		" "		rst	7
+1DF3 : FF 		" "		rst	7
+1DF4 : FF 		" "		rst	7
+1DF5 : FF 		" "		rst	7
+1DF6 : FF 		" "		rst	7
+1DF7 : FF 		" "		rst	7
+1DF8 : FF 		" "		rst	7
+1DF9 : FF 		" "		rst	7
+1DFA : FF 		" "		rst	7
+1DFB : FF 		" "		rst	7
+1DFC : FF 		" "		rst	7
+1DFD : FF 		" "		rst	7
+1DFE : FF 		" "		rst	7
+1DFF : FF 		" "		rst	7
+1E00 : FF 		" "		rst	7
+1E01 : FF 		" "		rst	7
+1E02 : FF 		" "		rst	7
+1E03 : FF 		" "		rst	7
+1E04 : FF 		" "		rst	7
+1E05 : FF 		" "		rst	7
+1E06 : FF 		" "		rst	7
+1E07 : FF 		" "		rst	7
+1E08 : FF 		" "		rst	7
+1E09 : FF 		" "		rst	7
+1E0A : FF 		" "		rst	7
+1E0B : FF 		" "		rst	7
+1E0C : FF 		" "		rst	7
+1E0D : FF 		" "		rst	7
+1E0E : FF 		" "		rst	7
+1E0F : FF 		" "		rst	7
+1E10 : FF 		" "		rst	7
+1E11 : FF 		" "		rst	7
+1E12 : FF 		" "		rst	7
+1E13 : FF 		" "		rst	7
+1E14 : FF 		" "		rst	7
+1E15 : FF 		" "		rst	7
+1E16 : FF 		" "		rst	7
+1E17 : FF 		" "		rst	7
+1E18 : FF 		" "		rst	7
+1E19 : FF 		" "		rst	7
+1E1A : FF 		" "		rst	7
+1E1B : FF 		" "		rst	7
+1E1C : FF 		" "		rst	7
+1E1D : FF 		" "		rst	7
+1E1E : FF 		" "		rst	7
+1E1F : FF 		" "		rst	7
+1E20 : FF 		" "		rst	7
+1E21 : FF 		" "		rst	7
+1E22 : FF 		" "		rst	7
+1E23 : FF 		" "		rst	7
+1E24 : FF 		" "		rst	7
+1E25 : FF 		" "		rst	7
+1E26 : FF 		" "		rst	7
+1E27 : FF 		" "		rst	7
+1E28 : FF 		" "		rst	7
+1E29 : FF 		" "		rst	7
+1E2A : FF 		" "		rst	7
+1E2B : FF 		" "		rst	7
+1E2C : FF 		" "		rst	7
+1E2D : FF 		" "		rst	7
+1E2E : FF 		" "		rst	7
+1E2F : FF 		" "		rst	7
+1E30 : FF 		" "		rst	7
+1E31 : FF 		" "		rst	7
+1E32 : FF 		" "		rst	7
+1E33 : FF 		" "		rst	7
+1E34 : FF 		" "		rst	7
+1E35 : FF 		" "		rst	7
+1E36 : FF 		" "		rst	7
+1E37 : FF 		" "		rst	7
+1E38 : FF 		" "		rst	7
+1E39 : FF 		" "		rst	7
+1E3A : FF 		" "		rst	7
+1E3B : FF 		" "		rst	7
+1E3C : FF 		" "		rst	7
+1E3D : FF 		" "		rst	7
+1E3E : FF 		" "		rst	7
+1E3F : FF 		" "		rst	7
+1E40 : FF 		" "		rst	7
+1E41 : FF 		" "		rst	7
+1E42 : FF 		" "		rst	7
+1E43 : FF 		" "		rst	7
+1E44 : FF 		" "		rst	7
+1E45 : FF 		" "		rst	7
+1E46 : FF 		" "		rst	7
+1E47 : FF 		" "		rst	7
+1E48 : FF 		" "		rst	7
+1E49 : FF 		" "		rst	7
+1E4A : FF 		" "		rst	7
+1E4B : FF 		" "		rst	7
+1E4C : FF 		" "		rst	7
+1E4D : FF 		" "		rst	7
+1E4E : FF 		" "		rst	7
+1E4F : FF 		" "		rst	7
+1E50 : FF 		" "		rst	7
+1E51 : FF 		" "		rst	7
+1E52 : FF 		" "		rst	7
+1E53 : FF 		" "		rst	7
+1E54 : FF 		" "		rst	7
+1E55 : FF 		" "		rst	7
+1E56 : FF 		" "		rst	7
+1E57 : FF 		" "		rst	7
+1E58 : FF 		" "		rst	7
+1E59 : FF 		" "		rst	7
+1E5A : FF 		" "		rst	7
+1E5B : FF 		" "		rst	7
+1E5C : FF 		" "		rst	7
+1E5D : FF 		" "		rst	7
+1E5E : FF 		" "		rst	7
+1E5F : FF 		" "		rst	7
+1E60 : FF 		" "		rst	7
+1E61 : FF 		" "		rst	7
+1E62 : FF 		" "		rst	7
+1E63 : FF 		" "		rst	7
+1E64 : FF 		" "		rst	7
+1E65 : FF 		" "		rst	7
+1E66 : FF 		" "		rst	7
+1E67 : FF 		" "		rst	7
+1E68 : FF 		" "		rst	7
+1E69 : FF 		" "		rst	7
+1E6A : FF 		" "		rst	7
+1E6B : FF 		" "		rst	7
+1E6C : FF 		" "		rst	7
+1E6D : FF 		" "		rst	7
+1E6E : FF 		" "		rst	7
+1E6F : FF 		" "		rst	7
+1E70 : FF 		" "		rst	7
+1E71 : FF 		" "		rst	7
+1E72 : FF 		" "		rst	7
+1E73 : FF 		" "		rst	7
+1E74 : FF 		" "		rst	7
+1E75 : FF 		" "		rst	7
+1E76 : FF 		" "		rst	7
+1E77 : FF 		" "		rst	7
+1E78 : FF 		" "		rst	7
+1E79 : FF 		" "		rst	7
+1E7A : FF 		" "		rst	7
+1E7B : FF 		" "		rst	7
+1E7C : FF 		" "		rst	7
+1E7D : FF 		" "		rst	7
+1E7E : FF 		" "		rst	7
+1E7F : FF 		" "		rst	7
+1E80 : FF 		" "		rst	7
+1E81 : FF 		" "		rst	7
+1E82 : FF 		" "		rst	7
+1E83 : FF 		" "		rst	7
+1E84 : FF 		" "		rst	7
+1E85 : FF 		" "		rst	7
+1E86 : FF 		" "		rst	7
+1E87 : FF 		" "		rst	7
+1E88 : FF 		" "		rst	7
+1E89 : FF 		" "		rst	7
+1E8A : FF 		" "		rst	7
+1E8B : FF 		" "		rst	7
+1E8C : FF 		" "		rst	7
+1E8D : FF 		" "		rst	7
+1E8E : FF 		" "		rst	7
+1E8F : FF 		" "		rst	7
+1E90 : FF 		" "		rst	7
+1E91 : FF 		" "		rst	7
+1E92 : FF 		" "		rst	7
+1E93 : FF 		" "		rst	7
+1E94 : FF 		" "		rst	7
+1E95 : FF 		" "		rst	7
+1E96 : FF 		" "		rst	7
+1E97 : FF 		" "		rst	7
+1E98 : FF 		" "		rst	7
+1E99 : FF 		" "		rst	7
+1E9A : FF 		" "		rst	7
+1E9B : FF 		" "		rst	7
+1E9C : FF 		" "		rst	7
+1E9D : FF 		" "		rst	7
+1E9E : FF 		" "		rst	7
+1E9F : FF 		" "		rst	7
+1EA0 : FF 		" "		rst	7
+1EA1 : FF 		" "		rst	7
+1EA2 : FF 		" "		rst	7
+1EA3 : FF 		" "		rst	7
+1EA4 : FF 		" "		rst	7
+1EA5 : FF 		" "		rst	7
+1EA6 : FF 		" "		rst	7
+1EA7 : FF 		" "		rst	7
+1EA8 : FF 		" "		rst	7
+1EA9 : FF 		" "		rst	7
+1EAA : FF 		" "		rst	7
+1EAB : FF 		" "		rst	7
+1EAC : FF 		" "		rst	7
+1EAD : FF 		" "		rst	7
+1EAE : FF 		" "		rst	7
+1EAF : FF 		" "		rst	7
+1EB0 : FF 		" "		rst	7
+1EB1 : FF 		" "		rst	7
+1EB2 : FF 		" "		rst	7
+1EB3 : FF 		" "		rst	7
+1EB4 : FF 		" "		rst	7
+1EB5 : FF 		" "		rst	7
+1EB6 : FF 		" "		rst	7
+1EB7 : FF 		" "		rst	7
+1EB8 : FF 		" "		rst	7
+1EB9 : FF 		" "		rst	7
+1EBA : FF 		" "		rst	7
+1EBB : FF 		" "		rst	7
+1EBC : FF 		" "		rst	7
+1EBD : FF 		" "		rst	7
+1EBE : FF 		" "		rst	7
+1EBF : FF 		" "		rst	7
+1EC0 : FF 		" "		rst	7
+1EC1 : FF 		" "		rst	7
+1EC2 : FF 		" "		rst	7
+1EC3 : FF 		" "		rst	7
+1EC4 : FF 		" "		rst	7
+1EC5 : FF 		" "		rst	7
+1EC6 : FF 		" "		rst	7
+1EC7 : FF 		" "		rst	7
+1EC8 : FF 		" "		rst	7
+1EC9 : FF 		" "		rst	7
+1ECA : FF 		" "		rst	7
+1ECB : FF 		" "		rst	7
+1ECC : FF 		" "		rst	7
+1ECD : FF 		" "		rst	7
+1ECE : FF 		" "		rst	7
+1ECF : FF 		" "		rst	7
+1ED0 : FF 		" "		rst	7
+1ED1 : FF 		" "		rst	7
+1ED2 : FF 		" "		rst	7
+1ED3 : FF 		" "		rst	7
+1ED4 : FF 		" "		rst	7
+1ED5 : FF 		" "		rst	7
+1ED6 : FF 		" "		rst	7
+1ED7 : FF 		" "		rst	7
+1ED8 : FF 		" "		rst	7
+1ED9 : FF 		" "		rst	7
+1EDA : FF 		" "		rst	7
+1EDB : FF 		" "		rst	7
+1EDC : FF 		" "		rst	7
+1EDD : FF 		" "		rst	7
+1EDE : FF 		" "		rst	7
+1EDF : FF 		" "		rst	7
+1EE0 : FF 		" "		rst	7
+1EE1 : FF 		" "		rst	7
+1EE2 : FF 		" "		rst	7
+1EE3 : FF 		" "		rst	7
+1EE4 : FF 		" "		rst	7
+1EE5 : FF 		" "		rst	7
+1EE6 : FF 		" "		rst	7
+1EE7 : FF 		" "		rst	7
+1EE8 : FF 		" "		rst	7
+1EE9 : FF 		" "		rst	7
+1EEA : FF 		" "		rst	7
+1EEB : FF 		" "		rst	7
+1EEC : FF 		" "		rst	7
+1EED : FF 		" "		rst	7
+1EEE : FF 		" "		rst	7
+1EEF : FF 		" "		rst	7
+1EF0 : FF 		" "		rst	7
+1EF1 : FF 		" "		rst	7
+1EF2 : FF 		" "		rst	7
+1EF3 : FF 		" "		rst	7
+1EF4 : FF 		" "		rst	7
+1EF5 : FF 		" "		rst	7
+1EF6 : FF 		" "		rst	7
+1EF7 : FF 		" "		rst	7
+1EF8 : FF 		" "		rst	7
+1EF9 : FF 		" "		rst	7
+1EFA : FF 		" "		rst	7
+1EFB : FF 		" "		rst	7
+1EFC : FF 		" "		rst	7
+1EFD : FF 		" "		rst	7
+1EFE : FF 		" "		rst	7
+1EFF : FF 		" "		rst	7
+1F00 : FF 		" "		rst	7
+1F01 : FF 		" "		rst	7
+1F02 : FF 		" "		rst	7
+1F03 : FF 		" "		rst	7
+1F04 : FF 		" "		rst	7
+1F05 : FF 		" "		rst	7
+1F06 : FF 		" "		rst	7
+1F07 : FF 		" "		rst	7
+1F08 : FF 		" "		rst	7
+1F09 : FF 		" "		rst	7
+1F0A : FF 		" "		rst	7
+1F0B : FF 		" "		rst	7
+1F0C : FF 		" "		rst	7
+1F0D : FF 		" "		rst	7
+1F0E : FF 		" "		rst	7
+1F0F : FF 		" "		rst	7
+1F10 : FF 		" "		rst	7
+1F11 : FF 		" "		rst	7
+1F12 : FF 		" "		rst	7
+1F13 : FF 		" "		rst	7
+1F14 : FF 		" "		rst	7
+1F15 : FF 		" "		rst	7
+1F16 : FF 		" "		rst	7
+1F17 : FF 		" "		rst	7
+1F18 : FF 		" "		rst	7
+1F19 : FF 		" "		rst	7
+1F1A : FF 		" "		rst	7
+1F1B : FF 		" "		rst	7
+1F1C : FF 		" "		rst	7
+1F1D : FF 		" "		rst	7
+1F1E : FF 		" "		rst	7
+1F1F : FF 		" "		rst	7
+1F20 : FF 		" "		rst	7
+1F21 : FF 		" "		rst	7
+1F22 : FF 		" "		rst	7
+1F23 : FF 		" "		rst	7
+1F24 : FF 		" "		rst	7
+1F25 : FF 		" "		rst	7
+1F26 : FF 		" "		rst	7
+1F27 : FF 		" "		rst	7
+1F28 : FF 		" "		rst	7
+1F29 : FF 		" "		rst	7
+1F2A : FF 		" "		rst	7
+1F2B : FF 		" "		rst	7
+1F2C : FF 		" "		rst	7
+1F2D : FF 		" "		rst	7
+1F2E : FF 		" "		rst	7
+1F2F : FF 		" "		rst	7
+1F30 : FF 		" "		rst	7
+1F31 : FF 		" "		rst	7
+1F32 : FF 		" "		rst	7
+1F33 : FF 		" "		rst	7
+1F34 : FF 		" "		rst	7
+1F35 : FF 		" "		rst	7
+1F36 : FF 		" "		rst	7
+1F37 : FF 		" "		rst	7
+1F38 : FF 		" "		rst	7
+1F39 : FF 		" "		rst	7
+1F3A : FF 		" "		rst	7
+1F3B : FF 		" "		rst	7
+1F3C : FF 		" "		rst	7
+1F3D : FF 		" "		rst	7
+1F3E : FF 		" "		rst	7
+1F3F : FF 		" "		rst	7
+1F40 : FF 		" "		rst	7
+1F41 : FF 		" "		rst	7
+1F42 : FF 		" "		rst	7
+1F43 : FF 		" "		rst	7
+1F44 : FF 		" "		rst	7
+1F45 : FF 		" "		rst	7
+1F46 : FF 		" "		rst	7
+1F47 : FF 		" "		rst	7
+1F48 : FF 		" "		rst	7
+1F49 : FF 		" "		rst	7
+1F4A : FF 		" "		rst	7
+1F4B : FF 		" "		rst	7
+1F4C : FF 		" "		rst	7
+1F4D : FF 		" "		rst	7
+1F4E : FF 		" "		rst	7
+1F4F : FF 		" "		rst	7
+1F50 : FF 		" "		rst	7
+1F51 : FF 		" "		rst	7
+1F52 : FF 		" "		rst	7
+1F53 : FF 		" "		rst	7
+1F54 : FF 		" "		rst	7
+1F55 : FF 		" "		rst	7
+1F56 : FF 		" "		rst	7
+1F57 : FF 		" "		rst	7
+1F58 : FF 		" "		rst	7
+1F59 : FF 		" "		rst	7
+1F5A : FF 		" "		rst	7
+1F5B : FF 		" "		rst	7
+1F5C : FF 		" "		rst	7
+1F5D : FF 		" "		rst	7
+1F5E : FF 		" "		rst	7
+1F5F : FF 		" "		rst	7
+1F60 : FF 		" "		rst	7
+1F61 : FF 		" "		rst	7
+1F62 : FF 		" "		rst	7
+1F63 : FF 		" "		rst	7
+1F64 : FF 		" "		rst	7
+1F65 : FF 		" "		rst	7
+1F66 : FF 		" "		rst	7
+1F67 : FF 		" "		rst	7
+1F68 : FF 		" "		rst	7
+1F69 : FF 		" "		rst	7
+1F6A : FF 		" "		rst	7
+1F6B : FF 		" "		rst	7
+1F6C : FF 		" "		rst	7
+1F6D : FF 		" "		rst	7
+1F6E : FF 		" "		rst	7
+1F6F : FF 		" "		rst	7
+1F70 : FF 		" "		rst	7
+1F71 : FF 		" "		rst	7
+1F72 : FF 		" "		rst	7
+1F73 : FF 		" "		rst	7
+1F74 : FF 		" "		rst	7
+1F75 : FF 		" "		rst	7
+1F76 : FF 		" "		rst	7
+1F77 : FF 		" "		rst	7
+1F78 : FF 		" "		rst	7
+1F79 : FF 		" "		rst	7
+1F7A : FF 		" "		rst	7
+1F7B : FF 		" "		rst	7
+1F7C : FF 		" "		rst	7
+1F7D : FF 		" "		rst	7
+1F7E : FF 		" "		rst	7
+1F7F : FF 		" "		rst	7
+1F80 : FF 		" "		rst	7
+1F81 : FF 		" "		rst	7
+1F82 : FF 		" "		rst	7
+1F83 : FF 		" "		rst	7
+1F84 : FF 		" "		rst	7
+1F85 : FF 		" "		rst	7
+1F86 : FF 		" "		rst	7
+1F87 : FF 		" "		rst	7
+1F88 : FF 		" "		rst	7
+1F89 : FF 		" "		rst	7
+1F8A : FF 		" "		rst	7
+1F8B : FF 		" "		rst	7
+1F8C : FF 		" "		rst	7
+1F8D : FF 		" "		rst	7
+1F8E : FF 		" "		rst	7
+1F8F : FF 		" "		rst	7
+1F90 : FF 		" "		rst	7
+1F91 : FF 		" "		rst	7
+1F92 : FF 		" "		rst	7
+1F93 : FF 		" "		rst	7
+1F94 : FF 		" "		rst	7
+1F95 : FF 		" "		rst	7
+1F96 : FF 		" "		rst	7
+1F97 : FF 		" "		rst	7
+1F98 : FF 		" "		rst	7
+1F99 : FF 		" "		rst	7
+1F9A : FF 		" "		rst	7
+1F9B : FF 		" "		rst	7
+1F9C : FF 		" "		rst	7
+1F9D : FF 		" "		rst	7
+1F9E : FF 		" "		rst	7
+1F9F : FF 		" "		rst	7
+1FA0 : FF 		" "		rst	7
+1FA1 : FF 		" "		rst	7
+1FA2 : FF 		" "		rst	7
+1FA3 : FF 		" "		rst	7
+1FA4 : FF 		" "		rst	7
+1FA5 : FF 		" "		rst	7
+1FA6 : FF 		" "		rst	7
+1FA7 : FF 		" "		rst	7
+1FA8 : FF 		" "		rst	7
+1FA9 : FF 		" "		rst	7
+1FAA : FF 		" "		rst	7
+1FAB : FF 		" "		rst	7
+1FAC : FF 		" "		rst	7
+1FAD : FF 		" "		rst	7
+1FAE : FF 		" "		rst	7
+1FAF : FF 		" "		rst	7
+1FB0 : FF 		" "		rst	7
+1FB1 : FF 		" "		rst	7
+1FB2 : FF 		" "		rst	7
+1FB3 : FF 		" "		rst	7
+1FB4 : FF 		" "		rst	7
+1FB5 : FF 		" "		rst	7
+1FB6 : FF 		" "		rst	7
+1FB7 : FF 		" "		rst	7
+1FB8 : FF 		" "		rst	7
+1FB9 : FF 		" "		rst	7
+1FBA : FF 		" "		rst	7
+1FBB : FF 		" "		rst	7
+1FBC : FF 		" "		rst	7
+1FBD : FF 		" "		rst	7
+1FBE : FF 		" "		rst	7
+1FBF : FF 		" "		rst	7
+1FC0 : FF 		" "		rst	7
+1FC1 : FF 		" "		rst	7
+1FC2 : FF 		" "		rst	7
+1FC3 : FF 		" "		rst	7
+1FC4 : FF 		" "		rst	7
+1FC5 : FF 		" "		rst	7
+1FC6 : FF 		" "		rst	7
+1FC7 : FF 		" "		rst	7
+1FC8 : FF 		" "		rst	7
+1FC9 : FF 		" "		rst	7
+1FCA : FF 		" "		rst	7
+1FCB : FF 		" "		rst	7
+1FCC : FF 		" "		rst	7
+1FCD : FF 		" "		rst	7
+1FCE : FF 		" "		rst	7
+1FCF : FF 		" "		rst	7
+1FD0 : FF 		" "		rst	7
+1FD1 : FF 		" "		rst	7
+1FD2 : FF 		" "		rst	7
+1FD3 : FF 		" "		rst	7
+1FD4 : FF 		" "		rst	7
+1FD5 : FF 		" "		rst	7
+1FD6 : FF 		" "		rst	7
+1FD7 : FF 		" "		rst	7
+1FD8 : FF 		" "		rst	7
+1FD9 : FF 		" "		rst	7
+1FDA : FF 		" "		rst	7
+1FDB : FF 		" "		rst	7
+1FDC : FF 		" "		rst	7
+1FDD : FF 		" "		rst	7
+1FDE : FF 		" "		rst	7
+1FDF : FF 		" "		rst	7
+1FE0 : FF 		" "		rst	7
+1FE1 : FF 		" "		rst	7
+1FE2 : FF 		" "		rst	7
+1FE3 : FF 		" "		rst	7
+1FE4 : FF 		" "		rst	7
+1FE5 : FF 		" "		rst	7
+1FE6 : FF 		" "		rst	7
+1FE7 : FF 		" "		rst	7
+1FE8 : FF 		" "		rst	7
+1FE9 : FF 		" "		rst	7
+1FEA : FF 		" "		rst	7
+1FEB : FF 		" "		rst	7
+1FEC : FF 		" "		rst	7
+1FED : FF 		" "		rst	7
+1FEE : FF 		" "		rst	7
+1FEF : FF 		" "		rst	7
+1FF0 : FF 		" "		rst	7
+1FF1 : FF 		" "		rst	7
+1FF2 : FF 		" "		rst	7
+1FF3 : FF 		" "		rst	7
+1FF4 : FF 		" "		rst	7
+1FF5 : FF 		" "		rst	7
+1FF6 : FF 		" "		rst	7
+1FF7 : FF 		" "		rst	7
+1FF8 : FF 		" "		rst	7
+1FF9 : FF 		" "		rst	7
+1FFA : FF 		" "		rst	7
+1FFB : FF 		" "		rst	7
+1FFC : FF 		" "		rst	7
+1FFD : FF 		" "		rst	7
+1FFE : FF 		" "		rst	7
+1FFF : FF 		" "		rst	7
+
+;--------------------------------------------------------------
+Symbol table
+============
+
+Value	Type	Name
+-----	----	----
+0000	 04	L0000
+1016	 04	L1016	;Write FDC data
+101A	 04	L101A
+1026	 04	L1026
+102C	 04	L102C	;read FDC data
+1038	 04	L1038
+103B	 04	L103B	;Set DMA
+1059	 04	L1059	;Write E bytes of FDD data at BC
+1066	 04	L1066
+1086	 04	L1086
+1087	 04	L1087	;sector command data
+10AE	 04	L10AE
+10B6	 04	L10B6
+10B7	 04	L10B7	;MemCopy
+110F	 04	L110F
+1136	 04	L1136
+1143	 04	L1143
+115A	 04	L115A
+1164	 04	L1164
+1168	 04	L1168
+1187	 04	L1187
+118A	 04	L118A
+11C5	 04	L11C5
+11EC	 04	L11EC
+11F9	 04	L11F9
+1210	 04	L1210
+121A	 04	L121A
+121B	 04	L121B
+1229	 04	L1229
+1234	 04	L1234	;read Bit 5 port C
+1240	 04	L1240
+1244	 04	L1244	;Read multiple FDD data
+124D	 04	L124D
+126F	 04	L126F
+1270	 04	L1270	;Sense status
+127B	 04	L127B	;Disk result
+1293	 04	L1293
+1299	 04	L1299
+12A4	 04	L12A4	;preset/delay
+12B0	 04	L12B0
+12C8	 04	L12C8
+12CE	 04	L12CE	;Select drive
+1310	 04	L1310
+1328	 04	L1328
+1345	 04	L1345
+134A	 04	L134A
+134B	 04	L134B
+1357	 04	L1357
+1377	 04	L1377	;seek track
+138F	 04	L138F
+13B3	 04	L13B3
+13DB	 04	L13DB
+13EE	 04	L13EE
+13F3	 04	L13F3
+13F4	 04	L13F4
+1400	 04	L1400
+140E	 04	L140E
+141A	 04	L141A
+1428	 04	L1428
+1434	 04	L1434
+1451	 04	L1451
+145D	 04	L145D
+146B	 04	L146B
+1496	 04	L1496
+14C1	 04	L14C1
+14D1	 04	L14D1
+14EE	 04	L14EE
+14F3	 04	L14F3
+14FF	 04	L14FF
+154C	 04	L154C
+154F	 04	L154F
+1554	 04	L1554
+15A1	 04	L15A1
+15A2	 04	L15A2	;error
+15B3	 04	L15B3
+1672	 04	L1672
+1673	 04	L1673
+168E	 04	L168E
+1697	 04	L1697
+16B6	 04	L16B6
+16E8	 04	L16E8
+1706	 04	L1706
+1723	 04	L1723
+174E	 04	L174E
+1757	 04	L1757
+175A	 04	L175A
+177E	 04	L177E
+1787	 04	L1787
+1795	 04	L1795
+1798	 04	L1798	;ret
+1799	 04	L1799
+17A6	 04	L17A6
+17A7	 04	L17A7
+17BF	 04	L17BF
+17C4	 04	L17C4
+17C5	 04	L17C5
+17DD	 04	L17DD
+17E2	 04	L17E2
+17E3	 04	L17E3
+17F3	 04	L17F3
+17F9	 04	L17F9
+182A	 04	L182A
+1832	 04	L1832
+183B	 04	L183B
+1883	 04	L1883   ;disk exit
+1889	 04	L1889
+1890	 04	L1890
+18A2	 04	L18A2
+18AC	 04	L18AC	;Shift left HL << C 
+18B5	 04	L18B5	;Substract HL=DE-HL
+18BC	 04	L18BC
+18C1	 04	L18C1	;Subtract HL = WORD(DE)-BC
+18CC	 04	L18CC	;Substract HL=DE-WORD(HL)
+18D5	 04	L18D5
+18D7	 04	L18D7
+18D8	 04	L18D8
+F815	 04	LF815
+
+Number of symbols:			117
+
+;--------------------------------------------------------------
