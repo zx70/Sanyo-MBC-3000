@@ -1,0 +1,175 @@
+0001   0000             ;----------------------------------------------------------------------------
+0002   0000             ; MBC-3000 xmodem diskdump for built in monitor by Edwin Blink Dec 2008
+0003   0000             ;----------------------------------------------------------------------------
+0004   0000             
+0005   0000             ;this program will read a disk track by track and transferes it at LINE-1
+0006   0000             ;serial port using xmodem protocol.
+0007   0000             
+0008   0000             ;Enter this program at address 0100H using the buildin in monitor program.
+0009   0000             ;Initialize LINE-1 serial port to 19200-8-N-1 by typing:
+0010   0000             
+0011   0000             ; SFF0C[SPACE]0C[SPACE]00[SPACE]FF[CR]
+0012   0000             
+0013   0000             ;Clear the LINE-1 reviever register by typing:
+0014   0000             
+0015   0000             ; SFF11[SPACE]00[ENTER]
+0016   0000             
+0017   0000             ;Execute the program by typing:
+0018   0000             
+0019   0000             ; G100[CR]
+0020   0000             
+0021   0000             ;start hyper terminal on PC configure com port to 19200-8-N-1 and select recieve
+0022   0000             ;file from the menu. Select xmodem for protocol. Transfer will start at 3rd attempt
+0023   0000             ;(only checksum protocol is supported) It takes about 20 mins to send the diskimage.
+0024   0000             ;Tracks with errors are reported during the transfer. Data at these tracks in the
+0025   0000             ;transfered image are unreliable.
+0026   0000              
+0027   0100                     .org    $0100
+0028   0100             
+0029   0100             SBUF:   .equ    $0200   ;start of track buffer
+0030   0100             SBSZ:   .equ    $2000   ;track size is 8Kb
+0031   0100             
+0032   0100             SOH:    .equ    $01     ;Xmoden controls
+0033   0100             EOT:    .equ    $04     
+0034   0100             ACK:    .equ    $06
+0035   0100             NAK:    .equ    $15
+0036   0100             CAN:    .equ    $18
+0037   0100               
+0038   0100             ;start with waiting for reciever to send NAK
+0039   0100             
+0040   0100 CD 7B 01    START:  call    TNAK    ;wait for NAK
+0041   0103 C2 00 01            jnz     START
+0042   0106                     
+0043   0106 3E 01               mvi     a,$01   ;first block
+0044   0108 32 30 01            sta     BLK
+0045   010B AF                  xra     a       ;Start at track 0
+0046   010C                    
+0047   010C             ;read disk track
+0048   010C                     
+0049   010C 01 8E 01    DOTRK:  lxi     b,DSKTR       ;track in disk structure
+0050   010F 02                  stax    b
+0051   0110 0E 8B               mvi     c,DSKCM % 256 ;LSB disk structure
+0052   0112 CD 5B E4            call    $E45B         ;DiskIO
+0053   0115 21 00 02            lxi     h,SBUF        ;sector buffer
+0054   0118 CA 29 01            jz      DOBLK         ;no error,send track
+0055   011B                     
+0056   011B             ;track error, print error
+0057   011B             
+0058   011B 3A 8E 01            lda     DSKTR   ;track
+0059   011E 4F                  mov     c,a
+0060   011F CD 8F E6            call    $E68F
+0061   0122 21 80 02            lxi     h,SBUF+$0080 ;Start of buffer with next corretion
+0062   0125             BLKER:        
+0063   0125 01 80 FF            lxi     b,$FF80 ;offset to last block
+0064   0128 09                  dad     b       ;point back to start of block
+0065   0129             
+0066   0129             ;send xmodem blocks
+0067   0129                         
+0068   0129             DOBLK:
+0069   0129 01 01 00            lxi      b,$0000+SOH
+0070   012C CD 72 01            call    TXC     ;send SOH
+0071   012F                     
+0072   012F             ;       pop     b
+0073   012F             ;       push    b
+0074   012F                          
+0075   012F             BLK:    .equ    $+1     
+0076   012F 0E 00               mvi     c,0     
+0077   0131 CD 72 01            call    TXC     ;send block nr
+0078   0134 79                  mov     a,c
+0079   0135 2F                  cma
+0080   0136 4F                  mov     c,a
+0081   0137 CD 72 01            call    TXC     ;send complemented block nr
+0082   013A             
+0083   013A             ;send block data
+0084   013A                     
+0085   013A 4E          DOBT:   mov     c,m     ;send byte
+0086   013B 23                  inx     h
+0087   013C CD 72 01            call    TXC
+0088   013F 78                  mov     a,b
+0089   0140 81                  add     c       ;SUM=SUM+C
+0090   0141 47                  mov     b,a
+0091   0142 7D                  mov     a,l     ;check 128 bytes done
+0092   0143 87                  add     a
+0093   0144 C2 3A 01            jnz     DOBT    ;do 128 bytes
+0094   0147 48                  mov     c,b
+0095   0148 CD 72 01            call    TXC     ;send checksum    
+0096   014B                     
+0097   014B             ;WAIT response
+0098   014B                     
+0099   014B CD 7B 01            call    TNAK    ;WAIT for ACK NAK
+0100   014E CA 25 01            jz      BLKER   ;retransmit block
+0101   0151             
+0102   0151             ;next block
+0103   0151             
+0104   0151 E5          NXTBLK: push    h
+0105   0152 21 30 01            lxi     h,BLK
+0106   0155 34                  inr     m
+0107   0156 E1                  pop     h
+0108   0157 7C                  mov     a,h
+0109   0158 FE 22               cpi     (SBUF+SBSZ)/256 ;8K
+0110   015A C2 29 01            jnz     DOBLK    ;loop sector buffer done
+0111   015D                     
+0112   015D             ;Next track
+0113   015D                   
+0114   015D 3A 8E 01            lda     DSKTR  
+0115   0160 3C                  inr     a       ;next track
+0116   0161 FE 9A               cpi     $9A     ;last track+1
+0117   0163 C2 0C 01            jnz     DOTRK   ;more tracks
+0118   0166             
+0119   0166 0E 04       DOEND:  mvi     c,EOT
+0120   0168 CD 72 01            call    TXC
+0121   016B CD 7B 01            call    TNAK
+0122   016E CA 66 01            jz      DOEND
+0123   0171 C9                  ret
+0124   0172                     
+0125   0172             ;Transmit character in C Reg        
+0126   0172             ;--------------------------- 
+0127   0172                    
+0128   0172 E5          TXC:    push    h
+0129   0173 11 06 00            lxi     d,$0006  ;Line-1 output
+0130   0176 CD 1E E4            call     $E41E   ;Write C
+0131   0179 E1                  pop     h
+0132   017A C9                  ret
+0133   017B                     
+0134   017B             ;Test for NAK or CAN    
+0135   017B             ;-------------------
+0136   017B                  
+0137   017B             TNAK:   
+0138   017B 11 05 00            lxi     d,$0005 ;Line-1 input device
+0139   017E E5                  push    h
+0140   017F CD 2C E4            call     $E42C  ;Read A
+0141   0182 E1                  pop     h
+0142   0183 FE 15               cpi     NAK
+0143   0185 C8                  rz              ;Z NAK
+0144   0186 FE 18               cpi     CAN
+0145   0188 C0                  rnz             ;NZ seen as ACK
+0146   0189                     
+0147   0189 C1                  pop     b       ;cancel so drop return
+0148   018A C9                  ret             ;return to monitor
+0149   018B                     
+0150   018B             ;disk command structure
+0151   018B                     
+0152   018B             DSKCM:       
+0153   018B 80                  .db     $80    ;normal
+0154   018C 04          DRIVE:  .db     $04    ;read sector drive A
+0155   018D 08                  .db     $08    ;sector count
+0156   018E 00          DSKTR:  .db     $00    ;Track
+0157   018F 01                  .db     $01    ;sector 
+0158   0190 00 02               .dw     SBUF  ;DMA address
+0159   0192             
+0160   0192                     .end
+0161   0192                     
+
+
+
+Label        Value      Label        Value      Label        Value
+------------------      ------------------      ------------------
+ACK           0006      BLKER         0125      BLK           0130      
+CAN           0018      DOTRK         010C      DOBLK         0129      
+DOBT          013A      DOEND         0166      DSKCM         018B      
+DRIVE         018C      DSKTR         018E      EOT           0004      
+NAK           0015      NXTBLK        0151      SBUF          0200      
+SBSZ          2000      SOH           0001      START         0100      
+TXC           0172      TNAK          017B      
+
+tasm: Number of errors = 0
